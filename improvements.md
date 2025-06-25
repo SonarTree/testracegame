@@ -3,7 +3,7 @@ Your project is already well-organized with separate modules for different aspec
 
 Create a dedicated AIController class: The AI logic is currently within the Game.update method. As the AI becomes more complex (e.g., avoiding obstacles, using power-ups), it would be beneficial to move its logic to a separate AIController class. This will make the Game.ts file cleaner and the AI logic easier to manage and test independently.
 
-Implement a PowerUpManager: Your to-do list mentions adding power-ups. Instead of managing power-up spawning and effects directly in the Game class, you could create a PowerUpManager. This class would be responsible for:
+[DONE] Implement a PowerUpManager: Your to-do list mentions adding power-ups. Instead of managing power-up spawning and effects directly in the Game class, you could create a PowerUpManager. This class would be responsible for:
 
 Spawning power-ups on the track.
 Detecting when a car collects a power-up.

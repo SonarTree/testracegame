@@ -40,7 +40,7 @@ Objective: To add more variety and challenge to the game.
 
 To-Do List:
 
-[ ] Add Power-ups:
+[x] Add Power-ups:
 
 Create a PowerUp class with different types (e.g., Speed Boost, Shield).
 Randomly spawn power-up items on the track for players to collect.

@@ -16,6 +16,7 @@ import { createTrack } from './game/Track';
 import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
 import SoundManager from './game/SoundManager';
 import { AIController } from './game/AIController';
+import { PowerUpManager } from './game/PowerUpManager';
 
 export class Game {
   private scene: THREE.Scene;
@@ -43,6 +44,7 @@ export class Game {
 
   private aiCar!: THREE.Mesh;
   private aiController!: AIController;
+  private powerUpManager!: PowerUpManager;
 
   private keyboard: { [key: string]: boolean } = {};
 
@@ -135,6 +137,37 @@ export class Game {
     }
     this.aiController = new AIController(this.aiCar, waypoints);
     
+    const powerUpSpawnPositions = [
+      new THREE.Vector3(config.track.radius, 0.5, 0),
+      new THREE.Vector3(-config.track.radius, 0.5, 0),
+      new THREE.Vector3(0, 0.5, config.track.radius),
+      new THREE.Vector3(0, 0.5, -config.track.radius),
+      new THREE.Vector3(
+        config.track.radius * Math.cos(Math.PI / 4),
+        0.5,
+        config.track.radius * Math.sin(Math.PI / 4)
+      ),
+      new THREE.Vector3(
+        config.track.radius * Math.cos((3 * Math.PI) / 4),
+        0.5,
+        config.track.radius * Math.sin((3 * Math.PI) / 4)
+      ),
+      new THREE.Vector3(
+        config.track.radius * Math.cos((5 * Math.PI) / 4),
+        0.5,
+        config.track.radius * Math.sin((5 * Math.PI) / 4)
+      ),
+      new THREE.Vector3(
+        config.track.radius * Math.cos((7 * Math.PI) / 4),
+        0.5,
+        config.track.radius * Math.sin((7 * Math.PI) / 4)
+      ),
+    ];
+    this.powerUpManager = new PowerUpManager(
+      this.scene,
+      powerUpSpawnPositions
+    );
+
     // Event Listeners
     window.addEventListener('resize', this.onWindowResize.bind(this));
     document.addEventListener('keydown', (event) => { this.keyboard[event.key.toLowerCase()] = true; });
@@ -172,6 +205,7 @@ export class Game {
     this.setState(GameState.PLAYING);
     this.raceStartTime = Date.now();
     this.lapStartTime = Date.now();
+    this.powerUpManager.start();
   }
   
   public returnToMenu() {
@@ -328,6 +362,7 @@ export class Game {
       this.lastQuadrant = currentQuadrant;
     }
 
+    this.powerUpManager.update(this.car, this.vehicle);
     this.aiController.update();
 
     // Make camera follow the car
