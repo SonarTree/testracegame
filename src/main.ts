@@ -34,28 +34,24 @@ const car = new THREE.Mesh(carGeometry, carMaterial);
 car.castShadow = true;
 scene.add(car);
 
-let speed = 0;
-let acceleration = 0;
-let steerAngle = 0;
-const maxSteer = Math.PI / 4;
-const maxSpeed = 1.0;
-const enginePower = 0.01;
-const brakingForce = 0.02;
-const friction = 0.99;
-const turnSpeed = 0.035;
+const carPhysics = {
+    velocity: new THREE.Vector3(),
+    engineForce: 0.015,
+    brakingForce: 0.02,
+    sidewaysGrip: 0.9,
+    drag: 0.99,
+    turnSpeed: 0.025,
+    restitution: 0.4, // Bounciness
+    driftGrip: 0.6, // Less grip when drifting
+    driftTriggerSpeed: 0.6, // Speed needed to drift
+};
 
+let gameStarted = false;
 let isDrifting = false;
-const driftTriggerSpeed = 0.6;
-const driftTurnMultiplier = 1.5;
-const driftFriction = 0.97;
-
 let boost = 0;
-const boostPerDriftSecond = 0.1;
-
 let cameraShakeIntensity = 0;
 
 const tireMarks: THREE.Mesh[] = [];
-const maxTireMarks = 100;
 const tireMarkMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
     transparent: true,
@@ -100,6 +96,13 @@ wall4.castShadow = true;
 wall4.receiveShadow = true;
 scene.add(wall4);
 
+const walls = [
+    { mesh: wall1, normal: new THREE.Vector3(0, 0, 1) },
+    { mesh: wall2, normal: new THREE.Vector3(0, 0, -1) },
+    { mesh: wall3, normal: new THREE.Vector3(1, 0, 0) },
+    { mesh: wall4, normal: new THREE.Vector3(-1, 0, 0) },
+];
+
 // Start/Finish Line
 const finishLine = new THREE.Mesh(
   new THREE.PlaneGeometry(10, 5),
@@ -123,8 +126,6 @@ const speedElement = document.getElementById('speed');
 const startButton = document.getElementById('start-button');
 const restartButton = document.getElementById('restart-button');
 
-let gameStarted = false;
-
 startButton?.addEventListener('click', () => {
   gameStarted = true;
   raceStartTime = Date.now();
@@ -135,9 +136,7 @@ startButton?.addEventListener('click', () => {
 restartButton?.addEventListener('click', () => {
   car.position.set(0, 0, 0);
   car.rotation.set(0, 0, 0);
-  speed = 0;
-  acceleration = 0;
-  steerAngle = 0;
+  carPhysics.velocity.set(0, 0, 0);
   lap = 0;
   raceStartTime = Date.now();
   lapStartTime = Date.now();
@@ -159,9 +158,6 @@ const waypoints = [
   new THREE.Vector3(-40, 0, 10),
 ];
 let currentWaypointIndex = 0;
-
-const walls = [wall1, wall2, wall3, wall4];
-const wallBoundingBoxes = walls.map(wall => new THREE.Box3().setFromObject(wall));
 
 // Keyboard state
 const keyboard: { [key: string]: boolean } = {};
@@ -200,93 +196,79 @@ function animate() {
   if (lapsElement) lapsElement.innerText = lap.toString();
   if (timeElement) timeElement.innerText = elapsedTime.toFixed(2);
   if (lapTimeElement) lapTimeElement.innerText = currentLapTime.toFixed(2);
-  if (speedElement) speedElement.innerText = (speed * 100).toFixed(0);
 
-  // Input
+  // --- Physics Simulation START ---
+
+  // 1. Get Player Input
   const forwardInput = (keyboard['w'] ? 1 : 0) - (keyboard['s'] ? 1 : 0);
   const turnInput = (keyboard['a'] ? 1 : 0) - (keyboard['d'] ? 1 : 0);
 
-  // Acceleration and Braking
-  acceleration = forwardInput * enginePower;
-  if (keyboard['s']) {
-      if (speed > 0) {
-          acceleration -= brakingForce;
+  // 2. Update Rotation
+  const currentSpeed = carPhysics.velocity.length();
+  const turnAmount = turnInput * carPhysics.turnSpeed * Math.min(currentSpeed, 1.0);
+  car.rotation.y += turnAmount;
+
+  // 3. Apply Engine/Braking Forces
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
+  const forwardVelocity = carPhysics.velocity.dot(forward);
+
+  if (forwardInput > 0) {
+      carPhysics.velocity.add(forward.multiplyScalar(carPhysics.engineForce));
+  } else if (forwardInput < 0) {
+      if (forwardVelocity > 0.01) {
+          // If moving forward, apply brakes opposite to the velocity direction
+          const brakeForce = carPhysics.velocity.clone().normalize().multiplyScalar(-carPhysics.brakingForce);
+          carPhysics.velocity.add(brakeForce);
+      } else {
+          // If stationary or moving backward, apply reverse thrust
+          carPhysics.velocity.add(forward.multiplyScalar(-carPhysics.engineForce * 0.7));
       }
   }
 
-  // Update speed
-  speed += acceleration;
-  
-  // Apply friction
-  if (isDrifting) {
-    speed *= driftFriction;
-  } else {
-    speed *= friction;
-  }
-
-  // Cap speed
-  if (speed > maxSpeed) speed = maxSpeed;
-  if (speed < -maxSpeed / 2) speed = -maxSpeed / 2;
-
-  // Update steering
-  steerAngle = turnInput * maxSteer;
-
-  // Check for drift conditions
+  // 4. Apply Friction & Drifting
   const wasDrifting = isDrifting;
-  isDrifting = speed > driftTriggerSpeed && turnInput !== 0;
+  isDrifting = currentSpeed > carPhysics.driftTriggerSpeed && turnInput !== 0;
+
+  const localVelocity = carPhysics.velocity.clone().applyQuaternion(car.quaternion.clone().invert());
 
   if (isDrifting) {
-    boost += boostPerDriftSecond / 60; // Assuming 60fps
-  } else if (wasDrifting && !isDrifting) {
-    // Apply boost when drift ends
-    speed += boost;
-    boost = 0;
+      localVelocity.x *= carPhysics.driftGrip;
+      boost += 0.002; // Accumulate boost
+  } else {
+      localVelocity.x *= carPhysics.sidewaysGrip;
+      if (wasDrifting) { // Apply boost when drift ends
+          const forwardBoost = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion).multiplyScalar(boost);
+          carPhysics.velocity.add(forwardBoost);
+          boost = 0;
+      }
   }
-
-  let currentTurnSpeed = turnSpeed;
+  localVelocity.z *= carPhysics.drag;
+  carPhysics.velocity.copy(localVelocity.applyQuaternion(car.quaternion));
+  
+  // Tire marks
   if (isDrifting) {
-    currentTurnSpeed = turnSpeed * driftTurnMultiplier;
+      createTireMark(car.position.clone().sub(new THREE.Vector3(0, car.geometry.parameters.height / 2 - 0.01, 0)));
   }
-
-  // Update car rotation based on speed and steering
-  if (Math.abs(speed) > 0.01) {
-    car.rotation.y += turnInput * currentTurnSpeed * (speed / maxSpeed);
-  }
-
-  // Add tire marks when drifting
-  if (isDrifting) {
-    const wheelOffset = 0.4;
-    const rearWheelPosition = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
-
-    const leftRearWheel = car.position.clone().add(rearWheelPosition).sub(new THREE.Vector3(wheelOffset, 0, 0).applyQuaternion(car.quaternion));
-    const rightRearWheel = car.position.clone().add(rearWheelPosition).add(new THREE.Vector3(wheelOffset, 0, 0).applyQuaternion(car.quaternion));
-
-    createTireMark(leftRearWheel);
-    createTireMark(rightRearWheel);
-  }
-
-  // Update position
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
-  car.position.add(forward.multiplyScalar(speed));
-
+  
+  // 5. Update Position
+  car.position.add(carPhysics.velocity);
+  
+  // 6. Collision Detection
   const carBBoxAfterMove = new THREE.Box3().setFromObject(car);
-  for (const wallBox of wallBoundingBoxes) {
-    if (carBBoxAfterMove.intersectsBox(wallBox)) {
-      car.position.copy(previousPosition);
-      speed *= -0.5; // Reverse and dampen speed on collision
-      cameraShakeIntensity = 0.2; // Trigger collision shake
-      break;
-    }
+  for (const wall of walls) {
+      const wallBBox = new THREE.Box3().setFromObject(wall.mesh);
+      if (carBBoxAfterMove.intersectsBox(wallBBox)) {
+          car.position.copy(previousPosition);
+          carPhysics.velocity.reflect(wall.normal).multiplyScalar(carPhysics.restitution);
+          cameraShakeIntensity = 0.2;
+          break;
+      }
   }
+  
+  // --- Physics Simulation END ---
 
-  const carVelocity = car.position.clone().sub(previousPosition);
-
-  const isCrossing = finishLinePlane.distanceToPoint(previousPosition) * finishLinePlane.distanceToPoint(car.position) < 0;
-
-  if (isCrossing && carVelocity.dot(finishLinePlane.normal) > 0) {
-      lap++;
-      lapStartTime = Date.now();
-  }
+  // Update UI
+  if (speedElement) speedElement.innerText = (carPhysics.velocity.length() * 200).toFixed(0);
 
   // AI Car movement
   const aiSpeed = 0.08;
@@ -312,22 +294,29 @@ function animate() {
   camera.position.copy(cameraPosition);
   camera.lookAt(car.position);
 
+  if (cameraShakeIntensity > 0) {
+    camera.position.x += (Math.random() - 0.5) * cameraShakeIntensity;
+    camera.position.y += (Math.random() - 0.5) * cameraShakeIntensity;
+    cameraShakeIntensity *= 0.9; // Decay shake
+  }
+
   previousPosition.copy(car.position);
   renderer.render(scene, camera);
 }
 
 function createTireMark(position: THREE.Vector3) {
-  const decalSize = new THREE.Vector3(0.2, 0.2, 0.2);
-  const decalGeometry = new DecalGeometry(ground, position, car.rotation, decalSize);
+  const decalSize = new THREE.Vector3(0.5, 2, 0.5);
+  const decalRotation = new THREE.Euler(car.rotation.x - Math.PI / 2, car.rotation.y, car.rotation.z);
+  const decalGeometry = new DecalGeometry(ground, position, decalRotation, decalSize);
   const tireMark = new THREE.Mesh(decalGeometry, tireMarkMaterial);
   scene.add(tireMark);
 
   tireMarks.push(tireMark);
-  if (tireMarks.length > maxTireMarks) {
+  if (tireMarks.length > 100) {
     const oldMark = tireMarks.shift();
     if (oldMark) {
-      scene.remove(oldMark);
-      oldMark.geometry.dispose();
+        scene.remove(oldMark);
+        oldMark.geometry.dispose();
     }
   }
 }

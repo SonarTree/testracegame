@@ -16,7 +16,7 @@ Consider adding a "boost" reward for successful drifts.
 Create a PowerUp class with different types (e.g., Speed Boost, Shield, Obstacle).
 Randomly spawn power-up items on the track for players to collect.
 Implement the logic for each power-up's effect.
-[ ] Refine Collision Physics:
+[x] Refine Collision Physics:
 
 Instead of just stopping the car on collision, implement a more realistic bounce-back effect. The angle and force of the collision should determine the car's reaction.
 [x] More Dynamic Camera:
