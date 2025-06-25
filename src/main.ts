@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
 
 // Scene
 const scene = new THREE.Scene();
@@ -42,6 +43,27 @@ const enginePower = 0.01;
 const brakingForce = 0.02;
 const friction = 0.99;
 const turnSpeed = 0.035;
+
+let isDrifting = false;
+const driftTriggerSpeed = 0.6;
+const driftTurnMultiplier = 1.5;
+const driftFriction = 0.97;
+
+let boost = 0;
+const boostPerDriftSecond = 0.1;
+
+let cameraShakeIntensity = 0;
+
+const tireMarks: THREE.Mesh[] = [];
+const maxTireMarks = 100;
+const tireMarkMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.4,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+});
 
 // Ground
 const groundGeometry = new THREE.PlaneGeometry(100, 100);
@@ -157,6 +179,13 @@ function animate() {
   requestAnimationFrame(animate);
 
   if (!gameStarted) {
+    // Cinematic start camera
+    const time = Date.now() * 0.0005;
+    camera.position.x = Math.sin(time) * 10;
+    camera.position.z = Math.cos(time) * 10;
+    camera.position.y = 5;
+    camera.lookAt(car.position);
+    renderer.render(scene, camera);
     return;
   }
 
@@ -187,7 +216,13 @@ function animate() {
 
   // Update speed
   speed += acceleration;
-  speed *= friction; // Apply friction
+  
+  // Apply friction
+  if (isDrifting) {
+    speed *= driftFriction;
+  } else {
+    speed *= friction;
+  }
 
   // Cap speed
   if (speed > maxSpeed) speed = maxSpeed;
@@ -196,9 +231,38 @@ function animate() {
   // Update steering
   steerAngle = turnInput * maxSteer;
 
+  // Check for drift conditions
+  const wasDrifting = isDrifting;
+  isDrifting = speed > driftTriggerSpeed && turnInput !== 0;
+
+  if (isDrifting) {
+    boost += boostPerDriftSecond / 60; // Assuming 60fps
+  } else if (wasDrifting && !isDrifting) {
+    // Apply boost when drift ends
+    speed += boost;
+    boost = 0;
+  }
+
+  let currentTurnSpeed = turnSpeed;
+  if (isDrifting) {
+    currentTurnSpeed = turnSpeed * driftTurnMultiplier;
+  }
+
   // Update car rotation based on speed and steering
   if (Math.abs(speed) > 0.01) {
-    car.rotation.y += turnInput * turnSpeed * (speed / maxSpeed);
+    car.rotation.y += turnInput * currentTurnSpeed * (speed / maxSpeed);
+  }
+
+  // Add tire marks when drifting
+  if (isDrifting) {
+    const wheelOffset = 0.4;
+    const rearWheelPosition = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
+
+    const leftRearWheel = car.position.clone().add(rearWheelPosition).sub(new THREE.Vector3(wheelOffset, 0, 0).applyQuaternion(car.quaternion));
+    const rightRearWheel = car.position.clone().add(rearWheelPosition).add(new THREE.Vector3(wheelOffset, 0, 0).applyQuaternion(car.quaternion));
+
+    createTireMark(leftRearWheel);
+    createTireMark(rightRearWheel);
   }
 
   // Update position
@@ -210,6 +274,7 @@ function animate() {
     if (carBBoxAfterMove.intersectsBox(wallBox)) {
       car.position.copy(previousPosition);
       speed *= -0.5; // Reverse and dampen speed on collision
+      cameraShakeIntensity = 0.2; // Trigger collision shake
       break;
     }
   }
@@ -249,6 +314,22 @@ function animate() {
 
   previousPosition.copy(car.position);
   renderer.render(scene, camera);
+}
+
+function createTireMark(position: THREE.Vector3) {
+  const decalSize = new THREE.Vector3(0.2, 0.2, 0.2);
+  const decalGeometry = new DecalGeometry(ground, position, car.rotation, decalSize);
+  const tireMark = new THREE.Mesh(decalGeometry, tireMarkMaterial);
+  scene.add(tireMark);
+
+  tireMarks.push(tireMark);
+  if (tireMarks.length > maxTireMarks) {
+    const oldMark = tireMarks.shift();
+    if (oldMark) {
+      scene.remove(oldMark);
+      oldMark.geometry.dispose();
+    }
+  }
 }
 
 animate(); 

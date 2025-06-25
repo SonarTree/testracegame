@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+dont immediately upload to github. ask first before commiting new changes
