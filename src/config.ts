@@ -5,6 +5,7 @@ export const config = {
         enginePower: 0.01,
         brakingForce: 0.02,
         friction: 0.99,
+        driftFriction: 0.95,
         turnSpeed: 0.05,
         restitution: 0.4,
     },

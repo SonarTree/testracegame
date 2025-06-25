@@ -30,7 +30,8 @@ export function createCar(scene: THREE.Scene): { car: Car; vehicle: Vehicle } {
 export function updateCarPhysics(
     car: Car,
     vehicle: Vehicle,
-    input: { forward: number; turn: number }
+    input: { forward: number; turn: number },
+    isDrifting: boolean
 ) {
     // 1. Update Steering Angle
     vehicle.steerAngle = input.turn * config.vehicle.maxSteer;
@@ -43,12 +44,17 @@ export function updateCarPhysics(
         vehicle.speed -= config.vehicle.brakingForce;
     }
 
-    vehicle.speed *= config.vehicle.friction;
+    // 3. Apply Friction
+    if (isDrifting) {
+        vehicle.speed *= config.vehicle.driftFriction;
+    } else {
+        vehicle.speed *= config.vehicle.friction;
+    }
 
-    // 3. Update Rotation & Position
+    // 4. Update Rotation & Position
     car.rotation.y += input.turn * config.vehicle.turnSpeed * (vehicle.speed / 1.0);
     
-    // 4. Move the car
+    // 5. Move the car
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
     const movement = forward.multiplyScalar(vehicle.speed);
     car.position.add(movement);

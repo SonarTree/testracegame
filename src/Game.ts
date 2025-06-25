@@ -239,9 +239,15 @@ export class Game {
     // 1. Get Player Input
     const forwardInput = (this.keyboard['w'] ? 1 : 0) - (this.keyboard['s'] ? 1 : 0);
     const turnInput = (this.keyboard['a'] ? 1 : 0) - (this.keyboard['d'] ? 1 : 0);
+    const isDrifting = this.keyboard['shift'] && turnInput !== 0 && Math.abs(this.vehicle.speed) > 0.1;
 
     // The core physics logic is now in this one function call
-    const movement = updateCarPhysics(this.car, this.vehicle, { forward: forwardInput, turn: turnInput });
+    const movement = updateCarPhysics(
+      this.car,
+      this.vehicle,
+      { forward: forwardInput, turn: turnInput },
+      isDrifting
+    );
 
     // --- Collision Detection ---
     const carRadius = this.car.position.length();
@@ -254,9 +260,19 @@ export class Game {
     }
 
     // Tire marks & drifting sound
-    const isDrifting = this.vehicle.steerAngle !== 0 && Math.abs(this.vehicle.speed) > 0.1;
     if (isDrifting) {
-      this.createTireMark(this.car.position.clone().sub(new THREE.Vector3(0, (this.car.geometry as THREE.BoxGeometry).parameters.height / 2 - 0.01, 0)));
+      this.createTireMark(
+        this.car.position
+          .clone()
+          .sub(
+            new THREE.Vector3(
+              0,
+              (this.car.geometry as THREE.BoxGeometry).parameters.height / 2 -
+                0.01,
+              0
+            )
+          )
+      );
       this.soundManager.playSound('drifting');
     } else {
       this.soundManager.stopSound('drifting');

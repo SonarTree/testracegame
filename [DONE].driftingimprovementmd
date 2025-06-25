@@ -1,0 +1,8 @@
+[DONE] Option 3: Advanced Prompt for Improved Physics
+This prompt is for a more advanced AI. It not only asks for the key press change but also suggests a future improvement to the car's physics for a more realistic drift.
+
+"I need to update the drifting mechanic in my game. Here are the requirements:
+
+Change Drift Activation: In src/Game.ts, modify the update method so that drifting is only activated when the Shift key is pressed. The skid marks and sound should only appear when the player is holding 'shift' while turning.
+
+Adjust Drifting Physics (Next Step): Once the key press is implemented, I want to make the drift feel more realistic. When the player is drifting, I want you to modify the updateCarPhysics function in src/game/Car.ts. When drifting is active, you should reduce the car's friction to make it slide more. You can add a new parameter to the updateCarPhysics function to indicate if the car is drifting or not." 

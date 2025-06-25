@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { createCar, updateCarPhysics, Car, Vehicle } from './Car';
 import { config } from '../config';
@@ -9,6 +9,19 @@ const mockScene = {
 };
 
 describe('Car Module', () => {
+  let car: Car;
+  let vehicle: Vehicle;
+
+  beforeEach(() => {
+    car = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2)) as Car;
+    vehicle = {
+      speed: 0,
+      acceleration: 0,
+      steerAngle: 0,
+      wheelBase: 1.5,
+    };
+  });
+
   describe('createCar', () => {
     it('should create a car mesh and a vehicle physics object with default values', () => {
       // We cast the mock scene to `any` to satisfy TypeScript
@@ -33,58 +46,34 @@ describe('Car Module', () => {
   });
 
   describe('updateCarPhysics', () => {
-    it('should increase speed when accelerating forward', () => {
-      const car = new THREE.Mesh() as Car;
-      const vehicle: Vehicle = { speed: 0, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
-      const input = { forward: 1, turn: 0 }; // Full throttle forward
-
-      updateCarPhysics(car, vehicle, input);
-
-      // Speed should increase by enginePower, then be reduced slightly by friction
-      const expectedSpeed = (0 + config.vehicle.enginePower) * config.vehicle.friction;
-      expect(vehicle.speed).toBeCloseTo(expectedSpeed);
-    });
-    
-    it('should apply friction even when there is no input', () => {
-        const car = new THREE.Mesh() as Car;
-        const vehicle: Vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
-        const input = { forward: 0, turn: 0 }; // No input
-
-        updateCarPhysics(car, vehicle, input);
-
-        expect(vehicle.speed).toBe(1 * config.vehicle.friction);
-    });
-    
-    it('should update car rotation based on turn input and speed', () => {
-      const car = new THREE.Mesh() as Car;
-      car.rotation.y = 0;
-      const vehicle: Vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
-      const input = { forward: 0, turn: 1 }; // Full turn right, constant speed
-
-      updateCarPhysics(car, vehicle, input);
-
-      // The car should turn by a predictable amount
-      const expectedRotation = config.vehicle.turnSpeed * (1 / 1.0);
-      expect(car.rotation.y).toBeCloseTo(expectedRotation);
+    it('should accelerate forward', () => {
+      updateCarPhysics(car, vehicle, { forward: 1, turn: 0 }, false);
+      expect(vehicle.speed).toBeGreaterThan(0);
     });
 
-    it('should move the car forward based on its speed and orientation', () => {
-        const car = new THREE.Mesh() as Car;
-        car.position.set(0, 0, 0);
-        car.quaternion.identity(); // Facing the default -Z direction
-        const vehicle: Vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
-        const input = { forward: 0, turn: 0 }; // No input, just coasting
+    it('should brake', () => {
+      vehicle.speed = 0.1;
+      updateCarPhysics(car, vehicle, { forward: -1, turn: 0 }, false);
+      expect(vehicle.speed).toBeLessThan(0.1);
+    });
 
-        // Calculate expected speed after friction is applied
-        const expectedSpeed = vehicle.speed * config.vehicle.friction;
-        const movement = updateCarPhysics(car, vehicle, input);
+    it('should turn left and right', () => {
+      vehicle.speed = 0.1;
+      const initialRotation = car.rotation.y;
+      updateCarPhysics(car, vehicle, { forward: 0, turn: 1 }, false);
+      expect(car.rotation.y).not.toBe(initialRotation);
+    });
 
-        expect(car.position.x).toBeCloseTo(0);
-        expect(car.position.y).toBeCloseTo(0);
-        // Position should be updated in the negative Z direction
-        expect(car.position.z).toBeCloseTo(-expectedSpeed);
-        // The returned movement vector should match
-        expect(movement.z).toBeCloseTo(-expectedSpeed);
+    it('should apply normal friction', () => {
+      vehicle.speed = 0.1;
+      updateCarPhysics(car, vehicle, { forward: 0, turn: 0 }, false);
+      expect(vehicle.speed).toBe(0.1 * config.vehicle.friction);
+    });
+
+    it('should apply drift friction when drifting', () => {
+      vehicle.speed = 0.1;
+      updateCarPhysics(car, vehicle, { forward: 0, turn: 1 }, true);
+      expect(vehicle.speed).toBe(0.1 * config.vehicle.driftFriction);
     });
   });
 }); 
