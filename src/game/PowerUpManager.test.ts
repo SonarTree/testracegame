@@ -45,6 +45,12 @@ describe('PowerUpManager', () => {
   })
 
   it('should spawn power-ups periodically', () => {
+    // Ensure we select different spawn points
+    vi.spyOn(Math, 'random')
+      .mockReturnValue(0) // Will select spawn point 0
+      .mockReturnValueOnce(0.25) // Will select spawn point 1
+      .mockReturnValueOnce(0.5); // Will select spawn point 2
+
     manager.start();
     // start() calls spawnPowerUp once immediately
     expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(1);

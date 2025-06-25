@@ -1,4 +1,3 @@
-import 'vitest-canvas-mock';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import {
@@ -72,19 +71,28 @@ describe('GameUI Module', () => {
 
     it('should draw on the minimap canvas', () => {
         const canvas = document.getElementById('minimap') as HTMLCanvasElement;
-        const ctx = canvas.getContext('2d');
-
-        // Spy on canvas context methods
-        const clearRectSpy = vi.spyOn(ctx!, 'clearRect');
-        const beginPathSpy = vi.spyOn(ctx!, 'beginPath');
-        const strokeSpy = vi.spyOn(ctx!, 'stroke');
-        const fillSpy = vi.spyOn(ctx!, 'fill');
+        
+        const mockCtx = {
+            clearRect: vi.fn(),
+            beginPath: vi.fn(),
+            stroke: vi.fn(),
+            fill: vi.fn(),
+            moveTo: vi.fn(),
+            lineTo: vi.fn(),
+            arc: vi.fn(),
+            closePath: vi.fn(),
+            strokeStyle: '',
+            fillStyle: '',
+            lineWidth: 0,
+        };
+        
+        vi.spyOn(canvas, 'getContext').mockReturnValue(mockCtx as any);
 
         updateMinimap({ x: 10, z: 20 }, { x: 15, z: 25 }, 50);
 
-        expect(clearRectSpy).toHaveBeenCalled();
-        expect(beginPathSpy).toHaveBeenCalledTimes(3); // 1 for track, 2 for cars
-        expect(strokeSpy).toHaveBeenCalledOnce();
-        expect(fillSpy).toHaveBeenCalledTimes(2); // 2 for cars
+        expect(mockCtx.clearRect).toHaveBeenCalled();
+        expect(mockCtx.beginPath).toHaveBeenCalledTimes(3); // 1 for track, 2 for cars
+        expect(mockCtx.stroke).toHaveBeenCalledOnce();
+        expect(mockCtx.fill).toHaveBeenCalledTimes(2); // 2 for cars
     });
 }); 
