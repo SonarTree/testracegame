@@ -42,7 +42,12 @@ describe('Game', () => {
     game.startGame()
     expect(game.state).toBe(GameState.PLAYING)
     expect(GameUI.showGameHud).toHaveBeenCalled()
-    // You can also check if the engine sound was played
+  })
+
+  it('should play engine sound when accelerating', () => {
+    game.startGame()
+    game['keyboard']['w'] = true // Simulate forward input
+    game['update']() // Manually call update to trigger sound logic
     const soundManagerInstance = (SoundManager as any).mock.instances[0]
     expect(soundManagerInstance.playSound).toHaveBeenCalledWith('engine')
   })

@@ -170,7 +170,6 @@ export class Game {
 
   public startGame() {
     this.setState(GameState.PLAYING);
-    this.soundManager.playSound('engine');
     this.raceStartTime = Date.now();
     this.lapStartTime = Date.now();
   }
@@ -257,6 +256,14 @@ export class Game {
       this.cameraShakeIntensity = config.camera.shakeIntensity;
       const collisionSound = Math.random() > 0.5 ? 'collision1' : 'collision2';
       this.soundManager.playSound(collisionSound);
+    }
+
+    // Engine sound
+    const isAccelerating = forwardInput !== 0
+    if (isAccelerating || Math.abs(this.vehicle.speed) > 0.05) {
+      this.soundManager.playSound('engine');
+    } else {
+      this.soundManager.stopSound('engine');
     }
 
     // Tire marks & drifting sound
