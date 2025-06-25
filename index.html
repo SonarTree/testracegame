@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Racing Game</title>
+    <style>
+      body { margin: 0; }
+      canvas { display: block; }
+      #ui {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-family: sans-serif;
+        background-color: rgba(0,0,0,0.5);
+        padding: 10px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="ui">
+      <div>Laps: <span id="laps">0</span></div>
+      <div>Time: <span id="time">0.00</span></div>
+      <div>Lap Time: <span id="lap-time">0.00</span></div>
+      <div>Speed: <span id="speed">0</span> km/h</div>
+      <button id="start-button">Start Race</button>
+      <button id="restart-button">Restart</button>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html> 
