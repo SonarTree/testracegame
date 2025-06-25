@@ -33,6 +33,16 @@ const car = new THREE.Mesh(carGeometry, carMaterial);
 car.castShadow = true;
 scene.add(car);
 
+let speed = 0;
+let acceleration = 0;
+let steerAngle = 0;
+const maxSteer = Math.PI / 4;
+const maxSpeed = 1.0;
+const enginePower = 0.01;
+const brakingForce = 0.02;
+const friction = 0.99;
+const turnSpeed = 0.035;
+
 // Ground
 const groundGeometry = new THREE.PlaneGeometry(100, 100);
 const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x404040, side: THREE.DoubleSide });
@@ -103,9 +113,9 @@ startButton?.addEventListener('click', () => {
 restartButton?.addEventListener('click', () => {
   car.position.set(0, 0, 0);
   car.rotation.set(0, 0, 0);
-  velocity = 0;
-  aiCar.position.z = -5;
-  currentWaypointIndex = 0;
+  speed = 0;
+  acceleration = 0;
+  steerAngle = 0;
   lap = 0;
   raceStartTime = Date.now();
   lapStartTime = Date.now();
@@ -134,12 +144,6 @@ const wallBoundingBoxes = walls.map(wall => new THREE.Box3().setFromObject(wall)
 // Keyboard state
 const keyboard: { [key: string]: boolean } = {};
 
-let velocity = 0;
-const acceleration = 0.01;
-const maxSpeed = 0.5;
-const friction = 0.005;
-const turnFriction = 0.05;
-
 document.addEventListener('keydown', (event) => {
   keyboard[event.key.toLowerCase()] = true;
 });
@@ -167,66 +171,49 @@ function animate() {
   if (lapsElement) lapsElement.innerText = lap.toString();
   if (timeElement) timeElement.innerText = elapsedTime.toFixed(2);
   if (lapTimeElement) lapTimeElement.innerText = currentLapTime.toFixed(2);
-  if (speedElement) speedElement.innerText = (Math.abs(velocity) * 100).toFixed(0);
+  if (speedElement) speedElement.innerText = (speed * 100).toFixed(0);
 
-  const rotationSpeed = 0.05;
+  // Input
+  const forwardInput = (keyboard['w'] ? 1 : 0) - (keyboard['s'] ? 1 : 0);
+  const turnInput = (keyboard['a'] ? 1 : 0) - (keyboard['d'] ? 1 : 0);
 
-  // Apply friction
-  if (velocity > 0) {
-    velocity -= friction;
-  } else if (velocity < 0) {
-    velocity += friction;
-  }
-  // Stop velocity if it's very small
-  if (Math.abs(velocity) < friction) {
-    velocity = 0;
-  }
-
-  if (keyboard['w']) {
-    if (velocity < maxSpeed) {
-      velocity += acceleration;
-    }
-  }
+  // Acceleration and Braking
+  acceleration = forwardInput * enginePower;
   if (keyboard['s']) {
-    if (velocity > -maxSpeed / 2) {
-      velocity -= acceleration / 2;
-    }
+      if (speed > 0) {
+          acceleration -= brakingForce;
+      }
   }
 
-  const moveDirection = new THREE.Vector3();
-  car.getWorldDirection(moveDirection);
-  moveDirection.normalize();
-  
-  car.position.add(moveDirection.clone().multiplyScalar(velocity));
+  // Update speed
+  speed += acceleration;
+  speed *= friction; // Apply friction
+
+  // Cap speed
+  if (speed > maxSpeed) speed = maxSpeed;
+  if (speed < -maxSpeed / 2) speed = -maxSpeed / 2;
+
+  // Update steering
+  steerAngle = turnInput * maxSteer;
+
+  // Update car rotation based on speed and steering
+  if (Math.abs(speed) > 0.01) {
+    car.rotation.y += turnInput * turnSpeed * (speed / maxSpeed);
+  }
+
+  // Update position
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
+  car.position.add(forward.multiplyScalar(speed));
 
   const carBBoxAfterMove = new THREE.Box3().setFromObject(car);
   for (const wallBox of wallBoundingBoxes) {
     if (carBBoxAfterMove.intersectsBox(wallBox)) {
       car.position.copy(previousPosition);
-      velocity = 0; // Stop the car on collision
+      speed *= -0.5; // Reverse and dampen speed on collision
       break;
     }
   }
 
-  if (keyboard['a']) {
-    if (velocity !== 0) {
-      const turn = rotationSpeed * (velocity / maxSpeed);
-      car.rotation.y += turn;
-       // Apply friction to velocity when turning
-       if(velocity > 0) velocity -= turnFriction;
-       else if(velocity < 0) velocity += turnFriction;
-    }
-  }
-  if (keyboard['d']) {
-    if (velocity !== 0) {
-      const turn = rotationSpeed * (velocity / maxSpeed);
-      car.rotation.y -= turn;
-       // Apply friction to velocity when turning
-      if(velocity > 0) velocity -= turnFriction;
-      else if(velocity < 0) velocity += turnFriction;
-    }
-  }
-  
   const carVelocity = car.position.clone().sub(previousPosition);
 
   const isCrossing = finishLinePlane.distanceToPoint(previousPosition) * finishLinePlane.distanceToPoint(car.position) < 0;
