@@ -18,17 +18,32 @@
         padding: 10px;
         border-radius: 5px;
       }
+      .hidden {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="ui">
-      <div>Laps: <span id="laps">0</span></div>
-      <div>Time: <span id="time">0.00</span></div>
-      <div>Lap Time: <span id="lap-time">0.00</span></div>
-      <div>Speed: <span id="speed">0</span> km/h</div>
-      <button id="start-button">Start Race</button>
-      <button id="restart-button">Restart</button>
+      <div id="main-menu" data-testid="main-menu">
+        <h1>3D Racing Game</h1>
+        <button id="start-button">Start Race</button>
+      </div>
+
+      <div id="game-hud" class="hidden" data-testid="game-hud">
+        <div>Laps: <span id="laps">0</span></div>
+        <div>Time: <span id="time">0.00</span></div>
+        <div>Lap Time: <span id="lap-time">0.00</span></div>
+        <div>Speed: <span id="speed">0</span> km/h</div>
+      </div>
+
+      <div id="race-over" class="hidden" data-testid="race-over">
+        <h2>Race Over!</h2>
+        <div id="final-time"></div>
+        <div id="total-laps"></div>
+        <button id="restart-button">Restart</button>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

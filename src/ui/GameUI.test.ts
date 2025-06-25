@@ -1,53 +1,51 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { updateUI } from './GameUI';
+import { showMainMenu, showGameHud, showRaceOverMenu } from './GameUI';
 
 describe('GameUI Module', () => {
     beforeEach(() => {
-        // Set up a mock DOM environment for each test
         document.body.innerHTML = `
-            <div id="laps">0</div>
-            <div id="time">0.00</div>
-            <div id="lap-time">0.00</div>
-            <div id="speed">0</div>
+            <div data-testid="main-menu" class="hidden"></div>
+            <div data-testid="game-hud" class="hidden"></div>
+            <div data-testid="race-over" class="hidden">
+                <div id="final-time"></div>
+                <div id="total-laps"></div>
+            </div>
         `;
     });
 
-    it('should update all UI elements with the provided data', () => {
-        // Data to be displayed
-        const testData = {
-            lap: 2,
-            elapsedTime: 123.456,
-            currentLapTime: 45.678,
-            speed: 0.88,
-        };
+    it('should show the main menu and hide other UI elements', () => {
+        const mainMenu = document.querySelector('[data-testid="main-menu"]');
+        const gameHud = document.querySelector('[data-testid="game-hud"]');
+        const raceOverMenu = document.querySelector('[data-testid="race-over"]');
 
-        // Call the function to update the UI
-        updateUI(testData);
+        showMainMenu();
 
-        // Verify the content of each element
-        const lapsElement = document.getElementById('laps');
-        const timeElement = document.getElementById('time');
-        const lapTimeElement = document.getElementById('lap-time');
-        const speedElement = document.getElementById('speed');
-
-        expect(lapsElement?.innerText).toBe('2');
-        expect(timeElement?.innerText).toBe('123.46'); // toFixed(2)
-        expect(lapTimeElement?.innerText).toBe('45.68'); // toFixed(2)
-        expect(speedElement?.innerText).toBe('88'); // (speed * 100).toFixed(0)
+        expect(mainMenu?.classList.contains('hidden')).toBe(false);
+        expect(gameHud?.classList.contains('hidden')).toBe(true);
+        expect(raceOverMenu?.classList.contains('hidden')).toBe(true);
     });
 
-    it('should handle missing elements gracefully', () => {
-        // Clear the mock DOM
-        document.body.innerHTML = '';
+    it('should show the game HUD and hide other UI elements', () => {
+        const mainMenu = document.querySelector('[data-testid="main-menu"]');
+        const gameHud = document.querySelector('[data-testid="game-hud"]');
+        const raceOverMenu = document.querySelector('[data-testid="race-over"]');
 
-        const testData = {
-            lap: 1,
-            elapsedTime: 10,
-            currentLapTime: 10,
-            speed: 0.5,
-        };
+        showGameHud();
 
-        // Expect the function to run without throwing an error
-        expect(() => updateUI(testData)).not.toThrow();
+        expect(mainMenu?.classList.contains('hidden')).toBe(true);
+        expect(gameHud?.classList.contains('hidden')).toBe(false);
+        expect(raceOverMenu?.classList.contains('hidden')).toBe(true);
+    });
+
+    it('should show the race over menu and hide other UI elements', () => {
+        const mainMenu = document.querySelector('[data-testid="main-menu"]');
+        const gameHud = document.querySelector('[data-testid="game-hud"]');
+        const raceOverMenu = document.querySelector('[data-testid="race-over"]');
+        
+        showRaceOverMenu(180.5, 3);
+
+        expect(mainMenu?.classList.contains('hidden')).toBe(true);
+        expect(gameHud?.classList.contains('hidden')).toBe(true);
+        expect(raceOverMenu?.classList.contains('hidden')).toBe(false);
     });
 }); 

@@ -1,0 +1,289 @@
+import * as THREE from 'three';
+import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
+import { GameState } from './game/GameState';
+import { config } from './config';
+import { updateUI, showMainMenu, showGameHud, showRaceOverMenu, startButton, restartButton } from './ui/GameUI';
+import { createTrack } from './game/Track';
+import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
+
+class Game {
+  private scene: THREE.Scene;
+  private camera: THREE.PerspectiveCamera;
+  private renderer: THREE.WebGLRenderer;
+  public state: GameState;
+
+  private road!: THREE.Mesh;
+  private innerRadius!: number;
+  private outerRadius!: number;
+  private car!: Car;
+  private vehicle!: Vehicle;
+
+  private lap = 0;
+  private passedHalfway = false;
+  private lastQuadrant = 0;
+  private raceStartTime = 0;
+  private lapStartTime = 0;
+  private cameraShakeIntensity = 0;
+
+  private tireMarks: THREE.Mesh[] = [];
+  private tireMarkMaterial: THREE.MeshBasicMaterial;
+
+  private aiCar!: THREE.Mesh;
+  private waypoints: THREE.Vector3[] = [];
+  private currentWaypointIndex = 0;
+
+  private keyboard: { [key: string]: boolean } = {};
+
+  constructor() {
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.state = GameState.MAIN_MENU;
+    this.tireMarkMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+    });
+
+    this.init();
+    this.animate();
+  }
+
+  private init() {
+    // Scene setup
+    this.scene.background = new THREE.Color(0xabcdef);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    this.scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(20, 50, 20);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    this.scene.add(directionalLight);
+    
+    // Camera
+    this.camera.position.set(0, 2, 5);
+    this.camera.lookAt(0, 0, 0);
+
+    // Renderer
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.shadowMap.enabled = true;
+    document.getElementById('app')?.appendChild(this.renderer.domElement);
+
+    // Track
+    const { road, innerRadius, outerRadius } = createTrack(this.scene);
+    this.road = road;
+    this.innerRadius = innerRadius;
+    this.outerRadius = outerRadius;
+
+    // Car
+    const { car, vehicle } = createCar(this.scene);
+    this.car = car;
+    this.vehicle = vehicle;
+    this.car.position.set(config.track.radius, 0.25, 0);
+    this.car.rotation.y = Math.PI;
+
+    // AI Car
+    this.aiCar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
+    this.aiCar.position.set(config.track.radius, 0.25, 2);
+    this.aiCar.rotation.y = Math.PI;
+    this.aiCar.castShadow = true;
+    this.scene.add(this.aiCar);
+
+    const numWaypoints = 32;
+    for (let i = 0; i < numWaypoints; i++) {
+      const angle = (i / numWaypoints) * 2 * Math.PI;
+      this.waypoints.push(
+        new THREE.Vector3(Math.cos(angle) * config.track.radius, 0, Math.sin(angle) * config.track.radius)
+      );
+    }
+    
+    // Event Listeners
+    window.addEventListener('resize', this.onWindowResize.bind(this));
+    document.addEventListener('keydown', (event) => { this.keyboard[event.key.toLowerCase()] = true; });
+    document.addEventListener('keyup', (event) => { this.keyboard[event.key.toLowerCase()] = false; });
+
+    startButton?.addEventListener('click', () => this.startGame());
+    restartButton?.addEventListener('click', () => this.restartGame());
+    
+    this.setState(GameState.MAIN_MENU);
+  }
+
+  private onWindowResize() {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  public setState(newState: GameState) {
+    this.state = newState;
+    
+    switch (this.state) {
+      case GameState.MAIN_MENU:
+        showMainMenu();
+        break;
+      case GameState.PLAYING:
+        showGameHud();
+        break;
+      case GameState.RACE_OVER:
+        showRaceOverMenu((Date.now() - this.raceStartTime) / 1000, this.lap);
+        break;
+    }
+  }
+
+  public startGame() {
+    this.setState(GameState.PLAYING);
+    this.raceStartTime = Date.now();
+    this.lapStartTime = Date.now();
+  }
+  
+  public restartGame() {
+    this.car.position.set(config.track.radius, 0.25, 0);
+    this.car.rotation.y = Math.PI;
+    this.vehicle.speed = 0;
+    this.lap = 0;
+    this.passedHalfway = false;
+    this.lastQuadrant = this.getQuadrant(this.car.position);
+    this.raceStartTime = Date.now();
+    this.lapStartTime = Date.now();
+    this.setState(GameState.PLAYING);
+  }
+
+  private getQuadrant(position: THREE.Vector3) {
+    if (position.x >= 0 && position.z > 0) return 1;
+    if (position.x < 0 && position.z >= 0) return 2;
+    if (position.x <= 0 && position.z < 0) return 3;
+    if (position.x > 0 && position.z <= 0) return 4;
+    return 0; // Should not happen on the track
+  }
+  
+  private createTireMark(position: THREE.Vector3) {
+    const decalSize = new THREE.Vector3(0.5, 2, 0.5);
+    const decalRotation = new THREE.Euler(this.car.rotation.x - Math.PI / 2, this.car.rotation.y, this.car.rotation.z);
+    const decalGeometry = new DecalGeometry(this.road, position, decalRotation, decalSize);
+    const tireMark = new THREE.Mesh(decalGeometry, this.tireMarkMaterial);
+    this.scene.add(tireMark);
+
+    this.tireMarks.push(tireMark);
+    if (this.tireMarks.length > 100) {
+      const oldMark = this.tireMarks.shift();
+      if (oldMark) {
+        this.scene.remove(oldMark);
+        oldMark.geometry.dispose();
+      }
+    }
+  }
+
+  private update() {
+    const elapsedTime = (Date.now() - this.raceStartTime) / 1000;
+    const currentLapTime = (Date.now() - this.lapStartTime) / 1000;
+
+    updateUI({
+      lap: this.lap,
+      elapsedTime,
+      currentLapTime,
+      speed: this.vehicle.speed,
+    });
+
+    // --- Physics Simulation START ---
+    const previousPosition = this.car.position.clone();
+
+    // 1. Get Player Input
+    const forwardInput = (this.keyboard['w'] ? 1 : 0) - (this.keyboard['s'] ? 1 : 0);
+    const turnInput = (this.keyboard['a'] ? 1 : 0) - (this.keyboard['d'] ? 1 : 0);
+
+    // The core physics logic is now in this one function call
+    const movement = updateCarPhysics(this.car, this.vehicle, { forward: forwardInput, turn: turnInput });
+
+    // --- Collision Detection ---
+    const carRadius = this.car.position.length();
+    if (carRadius > this.outerRadius || carRadius < this.innerRadius) {
+      this.car.position.copy(previousPosition);
+      this.vehicle.speed *= -config.vehicle.restitution; // Bounce back
+      this.cameraShakeIntensity = config.camera.shakeIntensity;
+    }
+
+    // Tire marks
+    if (this.vehicle.steerAngle !== 0) {
+      this.createTireMark(this.car.position.clone().sub(new THREE.Vector3(0, (this.car.geometry as THREE.BoxGeometry).parameters.height / 2 - 0.01, 0)));
+    }
+
+    // Lap Detection using Quadrants
+    const currentQuadrant = this.getQuadrant(this.car.position);
+
+    if (currentQuadrant !== this.lastQuadrant) {
+      if (this.lastQuadrant === 2 && currentQuadrant === 3) {
+        this.passedHalfway = true;
+      }
+
+      if (this.lastQuadrant === 4 && currentQuadrant === 1 && this.passedHalfway) {
+        if (Date.now() - this.lapStartTime > 3000) {
+          this.lap++;
+          this.lapStartTime = Date.now();
+          this.passedHalfway = false;
+          if (this.lap >= config.race.laps) {
+            this.setState(GameState.RACE_OVER);
+          }
+        }
+      }
+      this.lastQuadrant = currentQuadrant;
+    }
+
+    // AI Car movement
+    const aiSpeed = 0.08;
+    const waypoint = this.waypoints[this.currentWaypointIndex];
+    const distanceToWaypoint = this.aiCar.position.distanceTo(waypoint);
+
+    if (distanceToWaypoint < 1) {
+      this.currentWaypointIndex = (this.currentWaypointIndex + 1) % this.waypoints.length;
+    } else {
+      const direction = waypoint.clone().sub(this.aiCar.position).normalize();
+      this.aiCar.position.add(direction.multiplyScalar(aiSpeed));
+      this.aiCar.lookAt(waypoint);
+    }
+
+    // Make camera follow the car
+    const cameraOffset = new THREE.Vector3(0, 2, 5);
+    const carPosition = this.car.position.clone();
+    const cameraBehind = cameraOffset.clone().applyQuaternion(this.car.quaternion);
+    const cameraPosition = carPosition.add(cameraBehind);
+    this.camera.position.copy(cameraPosition);
+    this.camera.lookAt(this.car.position);
+
+    if (this.cameraShakeIntensity > 0) {
+      this.camera.position.x += (Math.random() - 0.5) * this.cameraShakeIntensity;
+      this.camera.position.y += (Math.random() - 0.5) * this.cameraShakeIntensity;
+      this.cameraShakeIntensity *= config.camera.shakeDecay;
+    }
+  }
+
+  private animate() {
+    requestAnimationFrame(this.animate.bind(this));
+    
+    switch (this.state) {
+        case GameState.MAIN_MENU:
+            const time = Date.now() * 0.0005;
+            this.camera.position.x = Math.sin(time) * 10;
+            this.camera.position.z = Math.cos(time) * 10;
+            this.camera.position.y = 5;
+            this.camera.lookAt(this.car.position);
+            break;
+        case GameState.PLAYING:
+            this.update();
+            break;
+        case GameState.RACE_OVER:
+            // Render the race over screen
+            break;
+    }
+
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+export default Game; 

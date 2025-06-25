@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { createCar, updateCarPhysics } from './Car';
+import { createCar, updateCarPhysics, Car, Vehicle } from './Car';
 import { config } from '../config';
 
 // Mock the scene's add method so we don't need a full scene object
@@ -34,8 +34,8 @@ describe('Car Module', () => {
 
   describe('updateCarPhysics', () => {
     it('should increase speed when accelerating forward', () => {
-      const car = new THREE.Mesh(); // A mock mesh is sufficient
-      const vehicle = { speed: 0, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
+      const car = new THREE.Mesh() as Car;
+      const vehicle: Vehicle = { speed: 0, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
       const input = { forward: 1, turn: 0 }; // Full throttle forward
 
       updateCarPhysics(car, vehicle, input);
@@ -46,8 +46,8 @@ describe('Car Module', () => {
     });
     
     it('should apply friction even when there is no input', () => {
-        const car = new THREE.Mesh();
-        const vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
+        const car = new THREE.Mesh() as Car;
+        const vehicle: Vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
         const input = { forward: 0, turn: 0 }; // No input
 
         updateCarPhysics(car, vehicle, input);
@@ -56,9 +56,9 @@ describe('Car Module', () => {
     });
     
     it('should update car rotation based on turn input and speed', () => {
-      const car = new THREE.Mesh();
+      const car = new THREE.Mesh() as Car;
       car.rotation.y = 0;
-      const vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
+      const vehicle: Vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
       const input = { forward: 0, turn: 1 }; // Full turn right, constant speed
 
       updateCarPhysics(car, vehicle, input);
@@ -69,10 +69,10 @@ describe('Car Module', () => {
     });
 
     it('should move the car forward based on its speed and orientation', () => {
-        const car = new THREE.Mesh();
+        const car = new THREE.Mesh() as Car;
         car.position.set(0, 0, 0);
         car.quaternion.identity(); // Facing the default -Z direction
-        const vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
+        const vehicle: Vehicle = { speed: 1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 };
         const input = { forward: 0, turn: 0 }; // No input, just coasting
 
         // Calculate expected speed after friction is applied

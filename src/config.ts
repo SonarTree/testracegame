@@ -20,5 +20,8 @@ export const config = {
         wallThickness: 1,
         wallTubeRadius: 0.5,
     },
+    race: {
+        laps: 3,
+    },
     // Add other settings as we refactor
 }; 

@@ -1,14 +1,23 @@
 import * as THREE from 'three';
 import { config } from '../config';
 
-export function createCar(scene: THREE.Scene) {
+export type Car = THREE.Mesh;
+
+export interface Vehicle {
+    speed: number;
+    acceleration: number;
+    steerAngle: number;
+    wheelBase: number;
+}
+
+export function createCar(scene: THREE.Scene): { car: Car; vehicle: Vehicle } {
     const carGeometry = new THREE.BoxGeometry(1, 0.5, 2);
     const carMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
     const car = new THREE.Mesh(carGeometry, carMaterial);
     car.castShadow = true;
     scene.add(car);
 
-    const vehicle = {
+    const vehicle: Vehicle = {
         speed: 0,
         acceleration: 0,
         steerAngle: 0,
@@ -19,8 +28,8 @@ export function createCar(scene: THREE.Scene) {
 }
 
 export function updateCarPhysics(
-    car: THREE.Mesh,
-    vehicle: { speed: number; acceleration: number; steerAngle: number; wheelBase: number },
+    car: Car,
+    vehicle: Vehicle,
     input: { forward: number; turn: number }
 ) {
     // 1. Update Steering Angle
