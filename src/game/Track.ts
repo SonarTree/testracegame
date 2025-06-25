@@ -1,6 +1,11 @@
 import * as THREE from 'three';
+import { config } from '../config';
 
 export function createTrack(scene: THREE.Scene) {
+    const { radius, width, wallSegments, wallHeight, wallTubeRadius } = config.track;
+    const innerRadius = radius - width / 2;
+    const outerRadius = radius + width / 2;
+
     // Ground
     const groundGeometry = new THREE.PlaneGeometry(100, 100);
     const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x404040, side: THREE.DoubleSide });
@@ -9,50 +14,40 @@ export function createTrack(scene: THREE.Scene) {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Track walls
+    // Road
+    const roadGeometry = new THREE.RingGeometry(innerRadius, outerRadius, 128);
+    const roadMaterial = new THREE.MeshPhongMaterial({ color: 0x303030, side: THREE.DoubleSide });
+    const road = new THREE.Mesh(roadGeometry, roadMaterial);
+    road.rotation.x = -Math.PI / 2;
+    road.receiveShadow = true;
+    scene.add(road);
+
+    // Walls (as smooth curbs)
     const wallMaterial = new THREE.MeshPhongMaterial({ color: 0xa0a0a0 });
-    const wall1 = new THREE.Mesh(new THREE.BoxGeometry(100, 2, 2), wallMaterial);
-    wall1.position.z = -20;
-    wall1.castShadow = true;
-    wall1.receiveShadow = true;
-    scene.add(wall1);
 
-    const wall2 = new THREE.Mesh(new THREE.BoxGeometry(100, 2, 2), wallMaterial);
-    wall2.position.z = 20;
-    wall2.castShadow = true;
-    wall2.receiveShadow = true;
-    scene.add(wall2);
-
-    const wall3 = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 40), wallMaterial);
-    wall3.position.x = -50;
-    wall3.castShadow = true;
-    wall3.receiveShadow = true;
-    scene.add(wall3);
-
-    const wall4 = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 40), wallMaterial);
-    wall4.position.x = 50;
-    wall4.castShadow = true;
-    wall4.receiveShadow = true;
-    scene.add(wall4);
-
-    const walls = [
-        { mesh: wall1, normal: new THREE.Vector3(0, 0, 1) },
-        { mesh: wall2, normal: new THREE.Vector3(0, 0, -1) },
-        { mesh: wall3, normal: new THREE.Vector3(1, 0, 0) },
-        { mesh: wall4, normal: new THREE.Vector3(-1, 0, 0) },
-    ];
+    const createWall = (ringRadius: number) => {
+        const wallGeometry = new THREE.TorusGeometry(ringRadius, wallTubeRadius, 16, wallSegments);
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.rotation.x = Math.PI / 2;
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        scene.add(wall);
+        return wall;
+    };
+    
+    const outerWall = createWall(outerRadius);
+    const innerWall = createWall(innerRadius);
 
     // Start/Finish Line
     const finishLine = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 5),
+      new THREE.PlaneGeometry(width, 5),
       new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/checker.png') })
     );
-    finishLine.position.z = 0;
-    finishLine.position.x = -45;
-    finishLine.rotation.y = Math.PI / 2;
+    finishLine.position.set(radius, 0.01, 0);
+    finishLine.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
     scene.add(finishLine);
     
     const finishLinePlane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(1, 0, 0), finishLine.position);
 
-    return { ground, walls, finishLine, finishLinePlane };
+    return { ground, road, outerWall, innerWall, outerRadius, innerRadius, finishLine, finishLinePlane };
 } 

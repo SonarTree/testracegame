@@ -12,5 +12,13 @@ export const config = {
         shakeIntensity: 0.2,
         shakeDecay: 0.9,
     },
+    track: {
+        radius: 35,
+        width: 10,
+        wallSegments: 64,
+        wallHeight: 2,
+        wallThickness: 1,
+        wallTubeRadius: 0.5,
+    },
     // Add other settings as we refactor
 }; 

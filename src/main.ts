@@ -31,8 +31,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.getElementById('app')?.appendChild(renderer.domElement);
 
-const { ground, walls, finishLinePlane } = createTrack(scene);
+const { road, innerRadius, outerRadius, finishLinePlane } = createTrack(scene);
 const { car, vehicle } = createCar(scene);
+car.position.x = config.track.radius; // Place car on the track's centerline
 
 let gameStarted = false;
 let isDrifting = false;
@@ -55,20 +56,19 @@ let lapStartTime = 0;
 let previousPosition = car.position.clone();
 
 // AI Opponent
-const aiCarGeometry = new THREE.BoxGeometry(1, 0.5, 2);
-const aiCarMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
-const aiCar = new THREE.Mesh(aiCarGeometry, aiCarMaterial);
+const aiCar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
+aiCar.position.set(config.track.radius, 0, 2); // Start AI near player on the track
 aiCar.castShadow = true;
-aiCar.receiveShadow = true;
-aiCar.position.z = -5;
 scene.add(aiCar);
 
-const waypoints = [
-  new THREE.Vector3(-40, 0, -10),
-  new THREE.Vector3(40, 0, -10),
-  new THREE.Vector3(40, 0, 10),
-  new THREE.Vector3(-40, 0, 10),
-];
+const waypoints: THREE.Vector3[] = [];
+const numWaypoints = 32; // More waypoints for a smoother path
+for (let i = 0; i < numWaypoints; i++) {
+    const angle = (i / numWaypoints) * 2 * Math.PI;
+    waypoints.push(
+        new THREE.Vector3(Math.cos(angle) * config.track.radius, 0, Math.sin(angle) * config.track.radius)
+    );
+}
 let currentWaypointIndex = 0;
 
 // Keyboard state
@@ -122,23 +122,17 @@ function animate() {
   // The core physics logic is now in this one function call
   const movement = updateCarPhysics(car, vehicle, { forward: forwardInput, turn: turnInput });
   
-  // --- Physics Simulation END ---
-
+  // --- Collision Detection ---
+  const carRadius = car.position.length();
+  if (carRadius > outerRadius || carRadius < innerRadius) {
+      car.position.copy(previousPosition);
+      vehicle.speed *= -config.vehicle.restitution; // Bounce back
+      cameraShakeIntensity = config.camera.shakeIntensity;
+  }
+  
   // Tire marks
   if (vehicle.steerAngle !== 0) {
       createTireMark(car.position.clone().sub(new THREE.Vector3(0, car.geometry.parameters.height / 2 - 0.01, 0)));
-  }
-  
-  // 5. Collision Detection
-  const carBBox = new THREE.Box3().setFromObject(car);
-  for (const wall of walls) {
-      const wallBBox = new THREE.Box3().setFromObject(wall.mesh);
-      if (carBBox.intersectsBox(wallBBox)) {
-          car.position.copy(previousPosition);
-          vehicle.speed *= -config.vehicle.restitution;
-          cameraShakeIntensity = config.camera.shakeIntensity;
-          break;
-      }
   }
   
   // AI Car movement
@@ -176,20 +170,20 @@ function animate() {
 }
 
 function createTireMark(position: THREE.Vector3) {
-  const decalSize = new THREE.Vector3(0.5, 2, 0.5);
-  const decalRotation = new THREE.Euler(car.rotation.x - Math.PI / 2, car.rotation.y, car.rotation.z);
-  const decalGeometry = new DecalGeometry(ground, position, decalRotation, decalSize);
-  const tireMark = new THREE.Mesh(decalGeometry, tireMarkMaterial);
-  scene.add(tireMark);
+    const decalSize = new THREE.Vector3(0.5, 2, 0.5);
+    const decalRotation = new THREE.Euler(car.rotation.x - Math.PI / 2, car.rotation.y, car.rotation.z);
+    const decalGeometry = new DecalGeometry(road, position, decalRotation, decalSize);
+    const tireMark = new THREE.Mesh(decalGeometry, tireMarkMaterial);
+    scene.add(tireMark);
 
-  tireMarks.push(tireMark);
-  if (tireMarks.length > 100) {
-    const oldMark = tireMarks.shift();
-    if (oldMark) {
-        scene.remove(oldMark);
-        oldMark.geometry.dispose();
+    tireMarks.push(tireMark);
+    if (tireMarks.length > 100) {
+        const oldMark = tireMarks.shift();
+        if (oldMark) {
+            scene.remove(oldMark);
+            oldMark.geometry.dispose();
+        }
     }
-  }
 }
 
 startButton?.addEventListener('click', () => {

@@ -11,6 +11,9 @@ To-Do List:
 Add a drift state when the player turns sharply at high speed.
 Visualize the drift with tire marks and a change in car handling.
 Consider adding a "boost" reward for successful drifts.
+[ ] Expand the Track:
+
+Replace the current box track with a circular or more complex layout to better test driving mechanics.
 [ ] Add Power-ups:
 
 Create a PowerUp class with different types (e.g., Speed Boost, Shield, Obstacle).
@@ -78,7 +81,7 @@ Objective: To make the code more organized and easier to maintain.
 
 To-Do List:
 
-[ ] Refactor main.ts:
+[x] Refactor main.ts:
 
 The main.ts file is getting large. Break down the code into separate classes or modules for:
 PlayerCar
@@ -89,6 +92,6 @@ Physics
 [ ] State Management:
 
 Implement a more robust game state manager (e.g., MainMenu, Playing, Paused, GameOver) to handle the flow of the game, instead of the current gameStarted boolean.
-[ ] Configuration File:
+[x] Configuration File:
 
 Move hardcoded values like car speed, acceleration, and friction into a separate configuration file or object for easier tweaking. 
