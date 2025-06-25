@@ -1,13 +1,14 @@
 import * as THREE from 'three'
-import { Car, Vehicle } from './Car'
+import { Entity } from '../ecs/Entity'
+import { PhysicsComponent } from '../ecs/components/PhysicsComponent'
 
 export type PowerUpType = 'speed-boost' | 'shield'
 
 export interface PowerUp {
   type: PowerUpType
   mesh: THREE.Mesh
-  applyEffect: (car: Car, vehicle: Vehicle) => void
-  removeEffect: (car: Car, vehicle: Vehicle) => void
+  applyEffect: (entity: Entity) => void
+  removeEffect: (entity: Entity) => void
 }
 
 export function createPowerUp(
@@ -17,8 +18,8 @@ export function createPowerUp(
   const geometry = new THREE.BoxGeometry(1, 1, 1)
   let material: THREE.MeshStandardMaterial
 
-  let applyEffect: (car: Car, vehicle: Vehicle) => void
-  let removeEffect: (car: Car, vehicle: Vehicle) => void
+  let applyEffect: (entity: Entity) => void
+  let removeEffect: (entity: Entity) => void
 
   switch (type) {
     case 'speed-boost':
@@ -27,10 +28,13 @@ export function createPowerUp(
         transparent: true,
         opacity: 0.7,
       })
-      applyEffect = (car, vehicle) => {
-        vehicle.speed += 0.5 // A large, temporary speed increase
+      applyEffect = (entity) => {
+        const physics = entity.getComponent(PhysicsComponent)
+        if (physics) {
+          physics.speed += 0.5 // A large, temporary speed increase
+        }
       }
-      removeEffect = (car, vehicle) => {
+      removeEffect = (entity) => {
         // Effect is instant, so no removal logic needed
       }
       break
@@ -40,10 +44,10 @@ export function createPowerUp(
         transparent: true,
         opacity: 0.7,
       })
-      applyEffect = (car, vehicle) => {
+      applyEffect = (entity) => {
         // Apply shield logic here
       }
-      removeEffect = (car, vehicle) => {
+      removeEffect = (entity) => {
         // Remove shield logic here
       }
       break

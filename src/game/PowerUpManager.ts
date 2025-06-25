@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { PowerUp, createPowerUp, PowerUpType } from './PowerUp'
-import { Car, Vehicle } from './Car'
+import { Entity } from '../ecs/Entity'
+import { TransformComponent } from '../ecs/components/TransformComponent'
 
 export class PowerUpManager {
   private scene: THREE.Scene
@@ -18,15 +19,18 @@ export class PowerUpManager {
     setInterval(() => this.spawnPowerUp(), 10000)
   }
 
-  public update(car: Car, vehicle: Vehicle) {
+  public update(playerEntity: Entity) {
+    const playerTransform = playerEntity.getComponent(TransformComponent)
+    if (!playerTransform) return
+
     for (let i = this.powerUps.length - 1; i >= 0; i--) {
       const powerUp = this.powerUps[i]
       powerUp.mesh.rotation.y += 0.01 // Make them slowly rotate
 
-      const distance = car.position.distanceTo(powerUp.mesh.position)
+      const distance = playerTransform.position.distanceTo(powerUp.mesh.position)
       if (distance < 2) {
         // Player collected the power-up
-        powerUp.applyEffect(car, vehicle)
+        powerUp.applyEffect(playerEntity)
         this.scene.remove(powerUp.mesh)
         this.powerUps.splice(i, 1)
         break // Assume only one power-up can be collected at a time

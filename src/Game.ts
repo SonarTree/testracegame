@@ -13,10 +13,23 @@ import {
   showNotification,
 } from './ui/GameUI';
 import { createTrack } from './game/Track';
-import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
 import SoundManager from './game/SoundManager';
-import { AIController } from './game/AIController';
 import { PowerUpManager } from './game/PowerUpManager';
+
+// ECS Imports
+import { EntityManager } from './ecs/EntityManager';
+import { Entity } from './ecs/Entity';
+import { TransformComponent } from './ecs/components/TransformComponent';
+import { RenderComponent } from './ecs/components/RenderComponent';
+import { PhysicsComponent } from './ecs/components/PhysicsComponent';
+import { PlayerInputComponent } from './ecs/components/PlayerInputComponent';
+import { AIControlComponent } from './ecs/components/AIControlComponent';
+import { LapTrackerComponent } from './ecs/components/LapTrackerComponent';
+import { InputSystem } from './ecs/systems/InputSystem';
+import { PhysicsSystem } from './ecs/systems/PhysicsSystem';
+import { AISystem } from './ecs/systems/AISystem';
+import { LapSystem, LapSystemEvent } from './ecs/systems/LapSystem';
+import { RenderSystem } from './ecs/systems/RenderSystem';
 
 export class Game {
   private scene: THREE.Scene;
@@ -25,25 +38,25 @@ export class Game {
   public state: GameState;
   private soundManager: SoundManager;
 
+  // ECS
+  private entityManager: EntityManager;
+  private inputSystem: InputSystem;
+  private physicsSystem: PhysicsSystem;
+  private aiSystem: AISystem;
+  private lapSystem: LapSystem;
+  private renderSystem: RenderSystem;
+
   private road!: THREE.Mesh;
   private innerRadius!: number;
   private outerRadius!: number;
-  private car!: Car;
-  private vehicle!: Vehicle;
 
-  private lap = 0;
-  private passedHalfway = false;
-  private lastQuadrant = 0;
   private raceStartTime = 0;
   private lapStartTime = 0;
   private cameraShakeIntensity = 0;
-  private isGoingWrongWay = false;
 
   private tireMarks: THREE.Mesh[] = [];
   private tireMarkMaterial: THREE.MeshBasicMaterial;
 
-  private aiCar!: THREE.Mesh;
-  private aiController!: AIController;
   private powerUpManager!: PowerUpManager;
 
   private keyboard: { [key: string]: boolean } = {};
@@ -54,6 +67,13 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.state = GameState.MAIN_MENU;
     this.soundManager = new SoundManager(this.camera);
+
+    this.entityManager = new EntityManager();
+    this.inputSystem = new InputSystem();
+    this.physicsSystem = new PhysicsSystem();
+    this.aiSystem = new AISystem();
+    this.lapSystem = new LapSystem();
+    this.renderSystem = new RenderSystem();
 
     this.tireMarkMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
@@ -118,64 +138,53 @@ export class Game {
 
     this.createTrees();
 
-    // Car
-    const { car, vehicle } = createCar(this.scene);
-    this.car = car;
-    this.vehicle = vehicle;
-    this.car.position.set(config.track.radius, 0.25, 0);
-    this.car.rotation.y = Math.PI;
-
-    // AI Car
-    this.aiCar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
-    this.aiCar.position.set(config.track.radius, 0.25, 2);
-    this.aiCar.rotation.y = Math.PI;
-    this.aiCar.castShadow = true;
-    this.scene.add(this.aiCar);
-
+    // Player Entity
+    const playerCarMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0xff0000 }));
+    playerCarMesh.castShadow = true;
+    this.scene.add(playerCarMesh);
+    const playerEntity = new Entity('player');
+    const playerTransform = new TransformComponent(
+        new THREE.Vector3(config.track.radius, 0.25, 0),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI),
+        new THREE.Euler(0, Math.PI, 0)
+    );
+    playerEntity.addComponent(playerTransform);
+    playerEntity.addComponent(new RenderComponent(playerCarMesh));
+    playerEntity.addComponent(new PhysicsComponent(0, 0, 0, config.vehicle.wheelBase));
+    playerEntity.addComponent(new PlayerInputComponent(this.keyboard));
+    const playerLapTracker = new LapTrackerComponent();
+    playerLapTracker.lastQuadrant = this.getQuadrant(playerTransform.position);
+    playerEntity.addComponent(playerLapTracker);
+    this.entityManager.addEntity(playerEntity);
+    
+    // AI Entity
+    const aiCarMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
+    aiCarMesh.castShadow = true;
+    this.scene.add(aiCarMesh);
     const numWaypoints = 32;
     const waypoints: THREE.Vector3[] = [];
     for (let i = 0; i < numWaypoints; i++) {
-      const angle = (i / numWaypoints) * 2 * Math.PI;
-      waypoints.push(
-        new THREE.Vector3(
-          Math.cos(angle) * config.track.radius,
-          0,
-          Math.sin(angle) * config.track.radius
-        )
-      );
+        const angle = (i / numWaypoints) * 2 * Math.PI;
+        waypoints.push(new THREE.Vector3(Math.cos(angle) * config.track.radius, 0, Math.sin(angle) * config.track.radius));
     }
-    this.aiController = new AIController(this.aiCar, this.car, waypoints);
-    
+    const aiEntity = new Entity('ai');
+    aiEntity.addComponent(new TransformComponent(
+        new THREE.Vector3(config.track.radius, 0.25, 2),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI),
+        new THREE.Euler(0, Math.PI, 0)
+    ));
+    aiEntity.addComponent(new RenderComponent(aiCarMesh));
+    aiEntity.addComponent(new PhysicsComponent(0, 0, 0, config.vehicle.wheelBase));
+    aiEntity.addComponent(new AIControlComponent(waypoints, 0, 0.08));
+    this.entityManager.addEntity(aiEntity);
+
     const powerUpSpawnPositions = [
       new THREE.Vector3(config.track.radius, 0.5, 0),
       new THREE.Vector3(-config.track.radius, 0.5, 0),
       new THREE.Vector3(0, 0.5, config.track.radius),
       new THREE.Vector3(0, 0.5, -config.track.radius),
-      new THREE.Vector3(
-        config.track.radius * Math.cos(Math.PI / 4),
-        0.5,
-        config.track.radius * Math.sin(Math.PI / 4)
-      ),
-      new THREE.Vector3(
-        config.track.radius * Math.cos((3 * Math.PI) / 4),
-        0.5,
-        config.track.radius * Math.sin((3 * Math.PI) / 4)
-      ),
-      new THREE.Vector3(
-        config.track.radius * Math.cos((5 * Math.PI) / 4),
-        0.5,
-        config.track.radius * Math.sin((5 * Math.PI) / 4)
-      ),
-      new THREE.Vector3(
-        config.track.radius * Math.cos((7 * Math.PI) / 4),
-        0.5,
-        config.track.radius * Math.sin((7 * Math.PI) / 4)
-      ),
     ];
-    this.powerUpManager = new PowerUpManager(
-      this.scene,
-      powerUpSpawnPositions
-    );
+    this.powerUpManager = new PowerUpManager(this.scene, powerUpSpawnPositions);
 
     // Event Listeners
     window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -205,7 +214,9 @@ export class Game {
         showGameHud();
         break;
       case GameState.RACE_OVER:
-        showRaceOverMenu((Date.now() - this.raceStartTime) / 1000, this.lap);
+        const playerEntity = this.entityManager.getEntity('player')!;
+        const lapTracker = playerEntity.getComponent(LapTrackerComponent)!;
+        showRaceOverMenu((Date.now() - this.raceStartTime) / 1000, lapTracker.lap);
         break;
     }
   }
@@ -218,12 +229,23 @@ export class Game {
   }
   
   public returnToMenu() {
-    this.car.position.set(config.track.radius, 0.25, 0);
-    this.car.rotation.y = Math.PI;
-    this.vehicle.speed = 0;
-    this.lap = 0;
-    this.passedHalfway = false;
-    this.lastQuadrant = this.getQuadrant(this.car.position);
+    const playerEntity = this.entityManager.getEntity('player')!;
+    const transform = playerEntity.getComponent(TransformComponent)!;
+    const physics = playerEntity.getComponent(PhysicsComponent)!;
+    const lapTracker = playerEntity.getComponent(LapTrackerComponent)!;
+    
+    transform.position.set(config.track.radius, 0.25, 0);
+    transform.rotation.y = Math.PI;
+    transform.quaternion.setFromEuler(transform.rotation);
+    
+    physics.speed = 0;
+    physics.acceleration = 0;
+    physics.steerAngle = 0;
+
+    lapTracker.lap = 0;
+    lapTracker.passedHalfway = false;
+    lapTracker.lastQuadrant = this.getQuadrant(transform.position);
+
     this.setState(GameState.MAIN_MENU);
     this.soundManager.stopSound('engine');
     this.soundManager.stopSound('drifting');
@@ -274,9 +296,9 @@ export class Game {
     await this.soundManager.loadSound('drifting', '/audio/drifting.wav', true);
   }
 
-  private createTireMark(position: THREE.Vector3) {
+  private createTireMark(position: THREE.Vector3, rotation: THREE.Euler) {
     const decalSize = new THREE.Vector3(0.5, 2, 0.5);
-    const decalRotation = new THREE.Euler(this.car.rotation.x - Math.PI / 2, this.car.rotation.y, this.car.rotation.z);
+    const decalRotation = new THREE.Euler(rotation.x - Math.PI / 2, rotation.y, rotation.z);
     const decalGeometry = new DecalGeometry(this.road, position, decalRotation, decalSize);
     const tireMark = new THREE.Mesh(decalGeometry, this.tireMarkMaterial);
     this.scene.add(tireMark);
@@ -291,131 +313,120 @@ export class Game {
     }
   }
 
+  private handleLapEvents(events: LapSystemEvent[]) {
+    for(const event of events) {
+        switch(event.type) {
+            case 'GAME_STATE_CHANGE':
+                this.setState(event.newState);
+                if (event.newState === GameState.RACE_OVER) {
+                    this.soundManager.playSound('finish-line');
+                    this.soundManager.stopSound('engine');
+                    this.soundManager.stopSound('drifting');
+                }
+                break;
+            case 'LAP_COMPLETED':
+                this.lapStartTime = Date.now();
+                const playerEntity = this.entityManager.getEntity('player')!;
+                const lapTracker = playerEntity.getComponent(LapTrackerComponent)!;
+                if (lapTracker.lap === config.race.laps) {
+                    showNotification('Final Lap!');
+                }
+                break;
+            case 'FINAL_LAP':
+                 showNotification('Final Lap!');
+                 break;
+            case 'WRONG_WAY':
+                showNotification('Wrong Way!', 2000);
+                break;
+        }
+    }
+  }
+
   private update() {
+    const deltaTime = 0; // Not used yet
+    const allEntities = this.entityManager.getAllEntities();
+    
+    // --- Systems ---
+    this.inputSystem.update(allEntities, deltaTime);
+    this.physicsSystem.update(allEntities, deltaTime);
+    this.aiSystem.update(allEntities, deltaTime);
+
+    this.lapSystem.gameState = this.state;
+    this.lapSystem.update(allEntities, deltaTime);
+    this.handleLapEvents(this.lapSystem.getEvents());
+
+    // Get player entity and components for reuse
+    const playerEntity = this.entityManager.getEntity('player')!;
+    if (!playerEntity) return;
+
+    const playerTransform = playerEntity.getComponent(TransformComponent)!;
+    const playerPhysics = playerEntity.getComponent(PhysicsComponent)!;
+    const playerRender = playerEntity.getComponent(RenderComponent)!;
+
+    // --- UI & Minimap ---
     const elapsedTime = (Date.now() - this.raceStartTime) / 1000;
     const currentLapTime = (Date.now() - this.lapStartTime) / 1000;
-
     updateUI({
-      lap: this.lap,
+      lap: playerEntity.getComponent(LapTrackerComponent)!.lap,
       elapsedTime,
       currentLapTime,
-      speed: this.vehicle.speed,
+      speed: playerPhysics.speed,
     });
+    
+    const aiEntity = this.entityManager.getEntity('ai');
+    if (aiEntity) {
+        const aiTransform = aiEntity.getComponent(TransformComponent)!;
+        updateMinimap(playerTransform.position, aiTransform.position, config.track.radius);
+    }
+    
+    // --- Other Game Logic (Collision, Sound, etc.) ---
+    const previousPosition = playerTransform.position.clone();
 
-    updateMinimap(this.car.position, this.aiCar.position, config.track.radius);
-
-    // --- Physics Simulation START ---
-    const previousPosition = this.car.position.clone();
-
-    // 1. Get Player Input
-    const forwardInput = (this.keyboard['w'] ? 1 : 0) - (this.keyboard['s'] ? 1 : 0);
-    const turnInput = (this.keyboard['a'] ? 1 : 0) - (this.keyboard['d'] ? 1 : 0);
-    const isDrifting = this.keyboard['shift'] && turnInput !== 0 && Math.abs(this.vehicle.speed) > 0.1;
-
-    // The core physics logic is now in this one function call
-    const movement = updateCarPhysics(
-      this.car,
-      this.vehicle,
-      { forward: forwardInput, turn: turnInput },
-      isDrifting
-    );
-
-    // --- Collision Detection ---
-    const carRadius = this.car.position.length();
+    // Collision Detection (Track boundaries)
+    const carRadius = playerTransform.position.length();
     if (carRadius > this.outerRadius || carRadius < this.innerRadius) {
-      this.car.position.copy(previousPosition);
-      this.vehicle.speed *= -config.vehicle.restitution; // Bounce back
+      playerTransform.position.copy(previousPosition);
+      playerPhysics.speed *= -config.vehicle.restitution;
       this.cameraShakeIntensity = config.camera.shakeIntensity;
       const collisionSound = Math.random() > 0.5 ? 'collision1' : 'collision2';
       this.soundManager.playSound(collisionSound);
     }
 
     // Engine sound
-    const isAccelerating = forwardInput !== 0
-    if (isAccelerating || Math.abs(this.vehicle.speed) > 0.05) {
+    if (playerPhysics.acceleration !== 0 || Math.abs(playerPhysics.speed) > 0.05) {
       this.soundManager.playSound('engine');
     } else {
       this.soundManager.stopSound('engine');
     }
 
     // Tire marks & drifting sound
-    if (isDrifting) {
+    if (playerPhysics.isDrifting) {
       this.createTireMark(
-        this.car.position
-          .clone()
-          .sub(
-            new THREE.Vector3(
-              0,
-              (this.car.geometry as THREE.BoxGeometry).parameters.height / 2 -
-                0.01,
-              0
-            )
-          )
+        playerTransform.position.clone().sub(new THREE.Vector3(0, (playerRender.mesh.geometry as THREE.BoxGeometry).parameters.height / 2 - 0.01, 0)),
+        playerTransform.rotation
       );
       this.soundManager.playSound('drifting');
     } else {
       this.soundManager.stopSound('drifting');
     }
 
-    // Lap Detection using Quadrants
-    const currentQuadrant = this.getQuadrant(this.car.position);
-    if (currentQuadrant !== this.lastQuadrant) {
-      // Wrong Way Detection
-      const isForward = currentQuadrant === (this.lastQuadrant % 4) + 1;
-      const isBackward = this.lastQuadrant === (currentQuadrant % 4) + 1;
+    // PowerUps
+    this.powerUpManager.update(playerEntity);
 
-      if (isBackward) {
-        this.passedHalfway = false; // Invalidate lap progress on any backward movement
-        if (this.state === GameState.PLAYING && !this.isGoingWrongWay) {
-          showNotification('Wrong Way!', 2000);
-          this.isGoingWrongWay = true;
-        }
-      } else if (isForward) {
-        this.isGoingWrongWay = false;
-      }
-
-      if (currentQuadrant === 1 && this.lastQuadrant === 4) {
-        // Crossed finish line
-        if (this.passedHalfway) {
-          // Check for race completion BEFORE incrementing lap
-          if (this.lap === config.race.laps) {
-            this.setState(GameState.RACE_OVER);
-            this.soundManager.playSound('finish-line');
-            this.soundManager.stopSound('engine');
-            this.soundManager.stopSound('drifting');
-            return; // Stop further processing this frame
-          }
-
-          this.lap++;
-          this.lapStartTime = Date.now();
-          this.passedHalfway = false;
-
-          if (this.lap === config.race.laps) {
-            showNotification('Final Lap!');
-          }
-        }
-      } else if (currentQuadrant === 3 && this.lastQuadrant === 2) {
-        this.passedHalfway = true;
-      }
-      this.lastQuadrant = currentQuadrant;
-    }
-
-    this.powerUpManager.update(this.car, this.vehicle);
-    this.aiController.update();
-
-    // Make camera follow the car
+    // Camera follow
     const cameraOffset = new THREE.Vector3(0, 2, 5);
-    const carPosition = this.car.position.clone();
-    const cameraBehind = cameraOffset.clone().applyQuaternion(this.car.quaternion);
-    const cameraPosition = carPosition.add(cameraBehind);
-    this.camera.position.copy(cameraPosition);
-    this.camera.lookAt(this.car.position);
+    const cameraBehind = cameraOffset.clone().applyQuaternion(playerTransform.quaternion);
+    this.camera.position.copy(playerTransform.position.clone().add(cameraBehind));
+    this.camera.lookAt(playerTransform.position);
 
     if (this.cameraShakeIntensity > 0) {
       this.camera.position.x += (Math.random() - 0.5) * this.cameraShakeIntensity;
       this.camera.position.y += (Math.random() - 0.5) * this.cameraShakeIntensity;
       this.cameraShakeIntensity *= config.camera.shakeDecay;
     }
+    
+    // --- Render System ---
+    this.renderSystem.update(allEntities, deltaTime);
   }
 
   private animate() {
@@ -423,7 +434,6 @@ export class Game {
     
     switch (this.state) {
         case GameState.MAIN_MENU:
-            // Rotating camera around the scene
             const time = Date.now() * 0.0002;
             this.camera.position.x = Math.sin(time) * 20;
             this.camera.position.z = Math.cos(time) * 20;
@@ -434,7 +444,6 @@ export class Game {
             this.update();
             break;
         case GameState.RACE_OVER:
-            // Keep rendering the scene but don't update game logic
             break;
     }
 
