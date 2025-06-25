@@ -5,12 +5,14 @@ import { config } from './config';
 import { updateUI, showMainMenu, showGameHud, showRaceOverMenu, startButton, restartButton, updateMinimap } from './ui/GameUI';
 import { createTrack } from './game/Track';
 import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
+import SoundManager from './game/SoundManager';
 
 class Game {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
   public state: GameState;
+  private soundManager: SoundManager;
 
   private road!: THREE.Mesh;
   private innerRadius!: number;
@@ -34,11 +36,13 @@ class Game {
 
   private keyboard: { [key: string]: boolean } = {};
 
-  constructor() {
+  private constructor() {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.state = GameState.MAIN_MENU;
+    this.soundManager = new SoundManager(this.camera);
+
     this.tireMarkMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
@@ -47,12 +51,16 @@ class Game {
       polygonOffset: true,
       polygonOffsetFactor: -4,
     });
-
-    this.init();
-    this.animate();
   }
 
-  private init() {
+  public static async create() {
+    const game = new Game();
+    await game.init();
+    game.animate();
+    return game;
+  }
+
+  private async init() {
     // Scene setup
     this.scene.background = new THREE.Color(0xabcdef);
 
@@ -75,6 +83,13 @@ class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     document.getElementById('app')?.appendChild(this.renderer.domElement);
+
+    // Sounds
+    try {
+      await this.loadSounds();
+    } catch (error) {
+      console.error("Could not load sounds. The game will continue without audio.", error);
+    }
 
     // Track
     const { road, innerRadius, outerRadius } = createTrack(this.scene);
@@ -139,6 +154,7 @@ class Game {
 
   public startGame() {
     this.setState(GameState.PLAYING);
+    this.soundManager.playSound('engine');
     this.raceStartTime = Date.now();
     this.lapStartTime = Date.now();
   }
@@ -151,6 +167,8 @@ class Game {
     this.passedHalfway = false;
     this.lastQuadrant = this.getQuadrant(this.car.position);
     this.setState(GameState.MAIN_MENU);
+    this.soundManager.stopSound('engine');
+    this.soundManager.stopSound('drifting');
   }
 
   private getQuadrant(position: THREE.Vector3) {
@@ -161,6 +179,14 @@ class Game {
     return 0; // Should not happen on the track
   }
   
+  private async loadSounds() {
+    await this.soundManager.loadSound('engine', '/audio/engine.wav', true);
+    await this.soundManager.loadSound('collision1', '/audio/collision 1.wav');
+    await this.soundManager.loadSound('collision2', '/audio/collision 2.wav');
+    await this.soundManager.loadSound('finish-line', '/audio/finishline.wav');
+    await this.soundManager.loadSound('drifting', '/audio/drifting.wav', true);
+  }
+
   private createTireMark(position: THREE.Vector3) {
     const decalSize = new THREE.Vector3(0.5, 2, 0.5);
     const decalRotation = new THREE.Euler(this.car.rotation.x - Math.PI / 2, this.car.rotation.y, this.car.rotation.z);
@@ -207,11 +233,17 @@ class Game {
       this.car.position.copy(previousPosition);
       this.vehicle.speed *= -config.vehicle.restitution; // Bounce back
       this.cameraShakeIntensity = config.camera.shakeIntensity;
+      const collisionSound = Math.random() > 0.5 ? 'collision1' : 'collision2';
+      this.soundManager.playSound(collisionSound);
     }
 
-    // Tire marks
-    if (this.vehicle.steerAngle !== 0) {
+    // Tire marks & drifting sound
+    const isDrifting = this.vehicle.steerAngle !== 0 && Math.abs(this.vehicle.speed) > 0.1;
+    if (isDrifting) {
       this.createTireMark(this.car.position.clone().sub(new THREE.Vector3(0, (this.car.geometry as THREE.BoxGeometry).parameters.height / 2 - 0.01, 0)));
+      this.soundManager.playSound('drifting');
+    } else {
+      this.soundManager.stopSound('drifting');
     }
 
     // Lap Detection using Quadrants
@@ -229,6 +261,9 @@ class Game {
           this.passedHalfway = false;
           if (this.lap >= config.race.laps) {
             this.setState(GameState.RACE_OVER);
+            this.soundManager.playSound('finish-line');
+            this.soundManager.stopSound('engine');
+            this.soundManager.stopSound('drifting');
           }
         }
       }

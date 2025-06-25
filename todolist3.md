@@ -25,7 +25,7 @@ To-Do List:
 [x] Add a Minimap:
 
 Create a 2D representation of the track and display the positions of the player and AI cars in real-time.
-[ ] Sound Effects:
+[x] Sound Effects:
 
 Integrate basic sound effects for:
 Engine sounds (idle, accelerating, max speed)
