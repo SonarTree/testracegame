@@ -7,5 +7,10 @@ export class PhysicsComponent extends Component {
         public steerAngle: number = 0,
         public wheelBase: number,
         public isDrifting: boolean = false,
+        public steering = 0,
+        public drift = 0,
+        public driftAngle = 0,
+        public isColliding = false,
+        public mass: number = 1
     ) { super(); }
 } 

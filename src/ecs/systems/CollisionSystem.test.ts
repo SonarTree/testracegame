@@ -31,15 +31,39 @@ describe('CollisionSystem', () => {
     const collisionEvents = collisionSystem.getEvents();
     expect(collisionEvents).toHaveLength(1);
     expect(collisionEvents[0].type).toBe('TRACK_COLLISION');
-    expect(physics.speed).toBeCloseTo(initialSpeed * -config.vehicle.restitution);
+    expect(physics.speed).toBeCloseTo(initialSpeed * -0.5);
   });
 
-  it('should set camera shake intensity on collision', () => {
-    expect(collisionSystem.cameraShakeIntensity).toBe(0);
-    
+  it('should create a collision event with shake intensity', () => {
     collisionSystem.update([entity], 1/60);
+    const events = collisionSystem.getEvents();
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe('TRACK_COLLISION');
+    expect(events[0].shakeIntensity).toBe(config.camera.shakeIntensity);
+  });
 
-    expect(collisionSystem.cameraShakeIntensity).toBe(config.camera.shakeIntensity);
+  it('should only create one collision event for continuous collision', () => {
+    // First collision
+    collisionSystem.update([entity], 1/60);
+    let events = collisionSystem.getEvents();
+    expect(events.length).toBe(1);
+    expect(physics.isColliding).toBe(true);
+
+    // Continuous collision
+    collisionSystem.update([entity], 1/60);
+    events = collisionSystem.getEvents();
+    expect(events.length).toBe(0); // No new event should be pushed
+  });
+
+  it('should reset isColliding when back on track', () => {
+    // First collision
+    collisionSystem.update([entity], 1/60);
+    expect(physics.isColliding).toBe(true);
+    
+    // Move back on track
+    transform.position.set(35, 0, 0);
+    collisionSystem.update([entity], 1/60);
+    expect(physics.isColliding).toBe(false);
   });
 
   it('should not trigger a collision when within track boundaries', () => {
@@ -50,6 +74,5 @@ describe('CollisionSystem', () => {
     const collisionEvents = collisionSystem.getEvents();
     expect(collisionEvents).toHaveLength(0);
     expect(physics.speed).toBe(0.5); // Speed should be unchanged
-    expect(collisionSystem.cameraShakeIntensity).toBe(0);
   });
 }); 

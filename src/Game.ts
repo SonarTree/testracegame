@@ -322,13 +322,20 @@ export class Game {
             case 'WRONG_WAY':
                 showNotification('Wrong Way!', 2000);
                 break;
+            case 'RACE_FINISHED':
+                this.soundManager.playSound('finishline');
+                this.setState(GameState.RACE_OVER);
+                break;
         }
     }
   }
 
   private handleCollisionEvents(events: CollisionEvent[]) {
-    if (events.some(e => e.type === 'TRACK_COLLISION')) {
+    for (const event of events) {
+      if (event.type === 'TRACK_COLLISION') {
         this.soundManager.playSound('collision 1');
+        this.cameraShakeIntensity = Math.max(this.cameraShakeIntensity, event.shakeIntensity);
+      }
     }
   }
 
@@ -347,7 +354,6 @@ export class Game {
 
       this.collisionSystem.update(allEntities, delta);
       this.handleCollisionEvents(this.collisionSystem.getEvents());
-      this.cameraShakeIntensity = this.collisionSystem.cameraShakeIntensity;
       
       const playerEntity = this.entityManager.getEntity('player');
       if (playerEntity) {
@@ -375,7 +381,7 @@ export class Game {
         } else {
             this.soundManager.stopSound('drifting');
         }
-        const engineVolume = Math.max(0.1, Math.abs(playerPhysics.speed) / 0.2);
+        const engineVolume = Math.min(1.0, Math.max(0.1, Math.abs(playerPhysics.speed) / 0.2));
         this.soundManager.setVolume('engine', engineVolume);
         this.soundManager.playSound('engine');
       }

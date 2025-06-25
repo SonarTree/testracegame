@@ -31,6 +31,8 @@ export class PhysicsSystem extends System {
         } else {
             physics.speed *= config.vehicle.friction;
         }
+
+        physics.speed = Math.max(-0.4, Math.min(0.4, physics.speed));
         
         // 3. Update Rotation
         // We use the raw steerAngle input here, same as the original logic.

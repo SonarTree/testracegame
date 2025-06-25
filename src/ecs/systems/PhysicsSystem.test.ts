@@ -22,26 +22,23 @@ describe('PhysicsSystem', () => {
   });
 
   it('should not exceed a practical maximum speed when accelerating', () => {
-    physics.speed = 1; // Start at a very high speed (our practical max)
+    physics.speed = 0.4; // Start at the max speed
     physics.acceleration = 1; // Still accelerating
 
     physicsSystem.update([entity], 1 / 60);
 
-    // Speed should increase by enginePower, but then be reduced by friction.
-    // The net effect should be a very small increase, capped by friction.
-    const expectedSpeed = (1 + config.vehicle.enginePower) * config.vehicle.friction;
-    expect(physics.speed).toBeCloseTo(expectedSpeed);
-    // This test ensures we don't have runaway acceleration. The friction acts as a natural speed limiter.
+    // Speed should be capped at 0.4
+    expect(physics.speed).toBe(0.4);
   });
 
-  it('should apply braking force when moving backward', () => {
-    physics.speed = -0.5; // Moving backward
+  it('should not exceed the maximum reverse speed', () => {
+    physics.speed = -0.4; // Moving backward at max speed
     physics.acceleration = -1; // "Braking" in reverse (which is just more acceleration)
     
     physicsSystem.update([entity], 1/60);
     
-    const expectedSpeed = (-0.5 + (-1 * config.vehicle.enginePower)) * config.vehicle.friction;
-    expect(physics.speed).toBeCloseTo(expectedSpeed, 5);
+    // Speed should be capped at -0.4
+    expect(physics.speed).toBe(-0.4);
   });
 
   it('should have less turning effect at very low speeds', () => {

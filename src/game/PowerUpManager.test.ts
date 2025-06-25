@@ -44,16 +44,17 @@ describe('PowerUpManager', () => {
     vi.restoreAllMocks()
   })
 
-  it('should spawn a power-up on start and then periodically', () => {
+  it('should spawn power-ups periodically via setInterval', () => {
     manager.start()
-    expect(PowerUpModule.createPowerUp).toHaveBeenCalledOnce()
+    // The initial call in start()
+    expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(1)
     expect(scene.add).toHaveBeenCalledWith(mockPowerUp.mesh)
 
-    // Advance time by 10 seconds
+    // Advance time by 10 seconds for the first interval
     vi.advanceTimersByTime(10000)
     expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(2)
 
-    // Advance time by another 10 seconds
+    // Advance time by another 10 seconds for the second interval
     vi.advanceTimersByTime(10000)
     expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(3)
   })

@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">82.67% </span>
+                <span class="strong">82.98% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>272/329</span>
+                <span class='fraction'>278/335</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">57.69% </span>
+                <span class="strong">58.49% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>30/52</span>
+                <span class='fraction'>31/53</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">82.67% </span>
+                <span class="strong">82.98% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>272/329</span>
+                <span class='fraction'>278/335</span>
             </div>
         
             
@@ -483,7 +483,13 @@
 <a name='L418'></a><a href='#L418'>418</a>
 <a name='L419'></a><a href='#L419'>419</a>
 <a name='L420'></a><a href='#L420'>420</a>
-<a name='L421'></a><a href='#L421'>421</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -791,22 +797,26 @@
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">5x</span>
@@ -815,6 +825,9 @@
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
@@ -830,7 +843,6 @@
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1227,13 +1239,20 @@ export class Game {
 <span class="branch-0 cbranch-no" title="branch not covered" >            case 'WRONG_WAY':</span>
 <span class="cstat-no" title="statement not covered" >                showNotification('Wrong Way!', 2000);</span>
 <span class="cstat-no" title="statement not covered" >                break;</span>
+            case 'RACE_FINISHED':
+                this.soundManager.playSound('finishline');
+                this.setState(GameState.RACE_OVER);
+                break;
         }
     }
   }
 &nbsp;
   private handleCollisionEvents(events: CollisionEvent[]) {
-    if (events.some(e =&gt; e.type === 'TRACK_COLLISION')) {
+    for (const event of events) {
+      if (event.type === 'TRACK_COLLISION') {
         this.soundManager.playSound('collision 1');
+        this.cameraShakeIntensity = Math.max(this.cameraShakeIntensity, event.shakeIntensity);
+      }
     }
   }
 &nbsp;
@@ -1252,7 +1271,6 @@ export class Game {
 &nbsp;
       this.collisionSystem.update(allEntities, delta);
       this.handleCollisionEvents(this.collisionSystem.getEvents());
-      this.cameraShakeIntensity = this.collisionSystem.cameraShakeIntensity;
       
       const playerEntity = this.entityManager.getEntity('player');
       if (playerEntity) {
@@ -1280,7 +1298,7 @@ export class Game {
         } else {
             this.soundManager.stopSound('drifting');
         }
-        const engineVolume = Math.max(0.1, Math.abs(playerPhysics.speed) / 0.2);
+        const engineVolume = Math.min(1.0, Math.max(0.1, Math.abs(playerPhysics.speed) / 0.2));
         this.soundManager.setVolume('engine', engineVolume);
         this.soundManager.playSound('engine');
       }
@@ -1330,7 +1348,7 @@ export class Game {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-06-25T20:46:48.731Z
+                at 2025-06-25T22:04:26.774Z
             </div>
         <script src="../prettify.js"></script>
         <script>

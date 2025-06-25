@@ -2,7 +2,7 @@ export const config = {
     vehicle: {
         wheelBase: 1.5,
         maxSteer: Math.PI / 6,
-        enginePower: 0.01,
+        enginePower: 0.005,
         brakingForce: 0.02,
         friction: 0.99,
         driftFriction: 0.95,

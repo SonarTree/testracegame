@@ -5,11 +5,11 @@ import { PhysicsComponent } from '../components/PhysicsComponent';
 import { config } from '../../config';
 
 export type CollisionEvent = {
-    type: 'TRACK_COLLISION'
+    type: 'TRACK_COLLISION',
+    shakeIntensity: number
 };
 
 export class CollisionSystem extends System {
-  public cameraShakeIntensity = 0;
   private events: CollisionEvent[] = [];
 
   constructor(private innerRadius: number, private outerRadius: number) {
@@ -31,10 +31,15 @@ export class CollisionSystem extends System {
 
         const carRadius = transform.position.length();
         if (carRadius > this.outerRadius || carRadius < this.innerRadius) {
+          if (!physics.isColliding) {
+            this.events.push({ type: 'TRACK_COLLISION', shakeIntensity: config.camera.shakeIntensity });
+            physics.isColliding = true;
+          }
+
           transform.position.copy(previousPosition);
-          physics.speed *= -config.vehicle.restitution;
-          this.cameraShakeIntensity = config.camera.shakeIntensity;
-          this.events.push({ type: 'TRACK_COLLISION' });
+          physics.speed *= -0.5;
+        } else {
+          physics.isColliding = false;
         }
       }
     }

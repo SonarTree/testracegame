@@ -10,7 +10,8 @@ export type LapSystemEvent =
   | { type: 'GAME_STATE_CHANGE'; newState: GameState }
   | { type: 'LAP_COMPLETED' }
   | { type: 'FINAL_LAP' }
-  | { type: 'WRONG_WAY' };
+  | { type: 'WRONG_WAY' }
+  | { type: 'RACE_FINISHED' };
 
 export class LapSystem extends System {
     public gameState!: GameState;
@@ -56,7 +57,7 @@ export class LapSystem extends System {
                     if (currentQuadrant === 1 && lastQuadrant === 4) { // Crossed finish line
                         if (lapTracker.passedHalfway) {
                             if (lapTracker.lap === config.race.laps) {
-                                this.events.push({ type: 'GAME_STATE_CHANGE', newState: GameState.RACE_OVER });
+                                this.events.push({ type: 'RACE_FINISHED' });
                                 continue; 
                             }
 
