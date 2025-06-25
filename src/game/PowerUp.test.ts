@@ -37,4 +37,25 @@ describe('PowerUp Module', () => {
     expect(powerUp.mesh).toBeInstanceOf(THREE.Mesh)
     expect(powerUp.mesh.position).toEqual(position)
   })
+
+  it('should not throw when applying speed-boost to an entity without a physics component', () => {
+    const powerUp = createPowerUp('speed-boost', new THREE.Vector3())
+    const entity = new Entity('no-physics')
+    expect(() => powerUp.applyEffect(entity)).not.toThrow()
+  })
+
+  it('should cover shield power-up effect and removal', () => {
+    const powerUp = createPowerUp('shield', new THREE.Vector3())
+    const entity = new Entity('test-shield')
+    expect(() => powerUp.applyEffect(entity)).not.toThrow()
+    expect(() => powerUp.removeEffect(entity)).not.toThrow()
+  })
+
+  it('should throw an error for an unknown power-up type', () => {
+    const position = new THREE.Vector3(0, 0, 0)
+    // @ts-expect-error - Testing invalid power-up type
+    expect(() => createPowerUp('unknown', position)).toThrow(
+      'Unknown power-up type: unknown'
+    )
+  })
 }) 

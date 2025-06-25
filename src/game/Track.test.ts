@@ -24,7 +24,8 @@ describe('Track Module', () => {
   });
 
   it('should create all track elements and return them', () => {
-    const trackPieces = createTrack(mockScene as any);
+    const mockTrackConfig = config.track;
+    const trackPieces = createTrack(mockScene as any, mockTrackConfig);
 
     expect(trackPieces).toHaveProperty('ground');
     expect(trackPieces).toHaveProperty('road');

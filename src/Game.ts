@@ -11,8 +11,13 @@ import {
   restartButton,
   updateMinimap,
   showNotification,
+  showMapSelectionMenu,
+  populateMapList,
+  startRaceButton,
+  backToMainMenuButton,
 } from './ui/GameUI';
 import { createTrack } from './game/Track';
+import { maps } from './game/maps';
 import SoundManager from './game/SoundManager';
 import { PowerUpManager } from './game/PowerUpManager';
 
@@ -38,6 +43,7 @@ export class Game {
   private renderer: THREE.WebGLRenderer;
   public state: GameState;
   private soundManager: SoundManager;
+  private selectedMapId: string | null = null;
 
   // ECS
   private entityManager: EntityManager;
@@ -46,7 +52,7 @@ export class Game {
   private aiSystem: AISystem;
   private lapSystem: LapSystem;
   private renderSystem: RenderSystem;
-  private collisionSystem: CollisionSystem;
+  private collisionSystem!: CollisionSystem;
 
   private road!: THREE.Mesh;
   private innerRadius!: number;
@@ -63,6 +69,8 @@ export class Game {
 
   private keyboard: { [key: string]: boolean } = {};
 
+  private roadMeshes: THREE.Object3D[] = [];
+
   private constructor() {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -76,7 +84,6 @@ export class Game {
     this.aiSystem = new AISystem();
     this.lapSystem = new LapSystem();
     this.renderSystem = new RenderSystem();
-    this.collisionSystem = null!;
 
     this.tireMarkMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
@@ -96,109 +103,55 @@ export class Game {
   }
 
   private async init() {
-    // Scene setup
     const loader = new THREE.CubeTextureLoader();
-    loader.setPath('/textures/skybox/'); // Relative to /public
-    const textureCube = loader.load([
-      'px.jpg', 'nx.jpg',
-      'py.jpg', 'ny.jpg',
-      'pz.jpg', 'nz.jpg'
-    ]);
-    this.scene.background = textureCube;
+    loader.setPath('/textures/skybox/');
+    this.scene.background = loader.load(['px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg']);
 
-    // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     this.scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(20, 50, 20);
     directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
     this.scene.add(directionalLight);
     
-    // Camera
     this.camera.position.set(0, 2, 5);
     this.camera.lookAt(0, 0, 0);
 
-    // Renderer
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     document.getElementById('app')?.appendChild(this.renderer.domElement);
 
-    // Sounds
     try {
-      await this.loadSounds();
+      await this.soundManager.loadSounds();
     } catch (error) {
       console.error("Could not load sounds. The game will continue without audio.", error);
     }
 
-    // Track
-    const { road, innerRadius, outerRadius } = createTrack(this.scene);
-    this.road = road;
-    this.innerRadius = innerRadius;
-    this.outerRadius = outerRadius;
-
-    // Now that we have the radii, we can create the collision system
-    this.collisionSystem = new CollisionSystem(this.innerRadius, this.outerRadius);
-
-    this.createTrees();
-
-    // Player Entity
-    const playerCarMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0xff0000 }));
-    playerCarMesh.castShadow = true;
-    this.scene.add(playerCarMesh);
-    const playerEntity = new Entity('player');
-    const playerTransform = new TransformComponent(
-        new THREE.Vector3(config.track.radius, 0.25, 0),
-        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI),
-        new THREE.Euler(0, Math.PI, 0)
-    );
-    playerEntity.addComponent(playerTransform);
-    playerEntity.addComponent(new RenderComponent(playerCarMesh));
-    playerEntity.addComponent(new PhysicsComponent(0, 0, 0, config.vehicle.wheelBase));
-    playerEntity.addComponent(new PlayerInputComponent(this.keyboard));
-    const playerLapTracker = new LapTrackerComponent();
-    playerLapTracker.lastQuadrant = this.getQuadrant(playerTransform.position);
-    playerEntity.addComponent(playerLapTracker);
-    this.entityManager.addEntity(playerEntity);
-    
-    // AI Entity
-    const aiCarMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
-    aiCarMesh.castShadow = true;
-    this.scene.add(aiCarMesh);
-    const numWaypoints = 32;
-    const waypoints: THREE.Vector3[] = [];
-    for (let i = 0; i < numWaypoints; i++) {
-        const angle = (i / numWaypoints) * 2 * Math.PI;
-        waypoints.push(new THREE.Vector3(Math.cos(angle) * config.track.radius, 0, Math.sin(angle) * config.track.radius));
-    }
-    const aiEntity = new Entity('ai');
-    aiEntity.addComponent(new TransformComponent(
-        new THREE.Vector3(config.track.radius, 0.25, 2),
-        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI),
-        new THREE.Euler(0, Math.PI, 0)
-    ));
-    aiEntity.addComponent(new RenderComponent(aiCarMesh));
-    aiEntity.addComponent(new PhysicsComponent(0, 0, 0, config.vehicle.wheelBase));
-    aiEntity.addComponent(new AIControlComponent(waypoints, 0, 0.08));
-    this.entityManager.addEntity(aiEntity);
-
-    const powerUpSpawnPositions = [
-      new THREE.Vector3(config.track.radius, 0.5, 0),
-      new THREE.Vector3(-config.track.radius, 0.5, 0),
-      new THREE.Vector3(0, 0.5, config.track.radius),
-      new THREE.Vector3(0, 0.5, -config.track.radius),
-    ];
-    this.powerUpManager = new PowerUpManager(this.scene, powerUpSpawnPositions);
-
-    // Event Listeners
     window.addEventListener('resize', this.onWindowResize.bind(this));
     document.addEventListener('keydown', (event) => { this.keyboard[event.key.toLowerCase()] = true; });
     document.addEventListener('keyup', (event) => { this.keyboard[event.key.toLowerCase()] = false; });
 
-    startButton?.addEventListener('click', () => this.startGame());
+    startButton?.addEventListener('click', () => this.setState(GameState.MAP_SELECTION));
     restartButton?.addEventListener('click', () => this.returnToMenu());
+
+    backToMainMenuButton?.addEventListener('click', () => this.setState(GameState.MAIN_MENU));
+
+    startRaceButton?.addEventListener('click', () => {
+        if (this.selectedMapId) {
+            this.startRace();
+        } else {
+            showNotification('Please select a map first!', 2000);
+        }
+    });
+    
+    const mapList = document.getElementById('map-list');
+    mapList?.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'LI' && target.dataset.mapId) {
+            this.selectedMapId = target.dataset.mapId;
+        }
+    });
     
     this.setState(GameState.MAIN_MENU);
   }
@@ -216,6 +169,11 @@ export class Game {
       case GameState.MAIN_MENU:
         showMainMenu();
         break;
+      case GameState.MAP_SELECTION:
+        this.selectedMapId = null;
+        showMapSelectionMenu();
+        populateMapList(maps);
+        break;
       case GameState.PLAYING:
         showGameHud();
         break;
@@ -227,7 +185,76 @@ export class Game {
     }
   }
 
-  public startGame() {
+  private startRace() {
+    if (!this.selectedMapId) return;
+    const selectedMap = maps.find(m => m.id === this.selectedMapId);
+    if (!selectedMap) return;
+
+    this.entityManager.getAllEntities().forEach(entity => {
+      const renderComponent = entity.getComponent(RenderComponent);
+      if (renderComponent) this.scene.remove(renderComponent.mesh);
+    });
+    this.entityManager.clear();
+
+    this.roadMeshes.forEach(mesh => this.scene.remove(mesh));
+    this.roadMeshes = [];
+
+    this.tireMarks.forEach(mark => this.scene.remove(mark));
+    this.tireMarks = [];
+    
+    if (this.powerUpManager) {
+        this.powerUpManager.stop();
+        this.powerUpManager.clearPowerUps();
+    }
+
+    const { road, innerWall, outerWall, ground, finishLine } = createTrack(this.scene, selectedMap.trackConfig);
+    this.road = road;
+    this.innerRadius = selectedMap.trackConfig.radius - selectedMap.trackConfig.width / 2;
+    this.outerRadius = selectedMap.trackConfig.radius + selectedMap.trackConfig.width / 2;
+    this.roadMeshes.push(road, innerWall, outerWall, ground, finishLine);
+
+    this.collisionSystem = new CollisionSystem(this.innerRadius, this.outerRadius);
+    this.createTrees();
+
+    const playerCarMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0xff0000 }));
+    playerCarMesh.castShadow = true;
+    this.scene.add(playerCarMesh);
+    const playerEntity = new Entity('player');
+    const playerTransform = new TransformComponent(new THREE.Vector3(selectedMap.trackConfig.radius, 0.25, 0), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), new THREE.Euler(0, Math.PI, 0));
+    playerEntity.addComponent(playerTransform);
+    playerEntity.addComponent(new RenderComponent(playerCarMesh));
+    playerEntity.addComponent(new PhysicsComponent(0,0,0,config.vehicle.wheelBase));
+    playerEntity.addComponent(new PlayerInputComponent(this.keyboard));
+    const playerLapTracker = new LapTrackerComponent();
+    playerLapTracker.lastQuadrant = this.getQuadrant(playerTransform.position);
+    playerEntity.addComponent(playerLapTracker);
+    this.entityManager.addEntity(playerEntity);
+    
+    const aiCarMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
+    aiCarMesh.castShadow = true;
+    this.scene.add(aiCarMesh);
+    const waypoints = Array.from({ length: 32 }, (_, i) => {
+      const angle = (i / 32) * 2 * Math.PI;
+      return new THREE.Vector3(Math.cos(angle) * selectedMap.trackConfig.radius, 0, Math.sin(angle) * selectedMap.trackConfig.radius);
+    });
+    const aiEntity = new Entity('ai');
+    aiEntity.addComponent(new TransformComponent(new THREE.Vector3(selectedMap.trackConfig.radius, 0.25, 2), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), new THREE.Euler(0, Math.PI, 0)));
+    aiEntity.addComponent(new RenderComponent(aiCarMesh));
+    aiEntity.addComponent(new PhysicsComponent(0,0,0,config.vehicle.wheelBase));
+    aiEntity.addComponent(new AIControlComponent(waypoints, 0, 0.08));
+    const aiLapTracker = new LapTrackerComponent();
+    aiLapTracker.lastQuadrant = this.getQuadrant(aiEntity.getComponent(TransformComponent)!.position);
+    aiEntity.addComponent(aiLapTracker);
+    this.entityManager.addEntity(aiEntity);
+
+    const powerUpSpawnPositions = [
+      new THREE.Vector3(selectedMap.trackConfig.radius, 0.5, 0),
+      new THREE.Vector3(-selectedMap.trackConfig.radius, 0.5, 0),
+      new THREE.Vector3(0, 0.5, selectedMap.trackConfig.radius),
+      new THREE.Vector3(0, 0.5, -selectedMap.trackConfig.radius),
+    ];
+    this.powerUpManager = new PowerUpManager(this.scene, powerUpSpawnPositions);
+    
     this.setState(GameState.PLAYING);
     this.raceStartTime = Date.now();
     this.lapStartTime = Date.now();
@@ -235,112 +262,63 @@ export class Game {
   }
   
   public returnToMenu() {
-    const playerEntity = this.entityManager.getEntity('player')!;
-    const transform = playerEntity.getComponent(TransformComponent)!;
-    const physics = playerEntity.getComponent(PhysicsComponent)!;
-    const lapTracker = playerEntity.getComponent(LapTrackerComponent)!;
-    
-    transform.position.set(config.track.radius, 0.25, 0);
-    transform.rotation.y = Math.PI;
-    transform.quaternion.setFromEuler(transform.rotation);
-    
-    physics.speed = 0;
-    physics.acceleration = 0;
-    physics.steerAngle = 0;
-
-    lapTracker.lap = 0;
-    lapTracker.passedHalfway = false;
-    lapTracker.lastQuadrant = this.getQuadrant(transform.position);
-
+    this.soundManager.stopAllSounds();
     this.setState(GameState.MAIN_MENU);
-    this.soundManager.stopSound('engine');
-    this.soundManager.stopSound('drifting');
   }
 
   private createTrees() {
-    const treeCount = 50;
-    const treeMaterial = new THREE.MeshPhongMaterial({ color: 0x006400 }); // Dark green
-    const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Saddle brown
-
-    for (let i = 0; i < treeCount; i++) {
-        // Position trees randomly outside the track
+    for (let i = 0; i < 50; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const distance = this.outerRadius + 5 + Math.random() * 20; // 5 to 25 units beyond the outer edge
+        const distance = this.outerRadius + 5 + Math.random() * 20;
         const x = Math.cos(angle) * distance;
         const z = Math.sin(angle) * distance;
-
-        // Simple tree model
-        const trunkHeight = 2 + Math.random() * 2;
-        const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.2, trunkHeight, 8);
-        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-        trunk.position.set(x, trunkHeight / 2, z);
-        trunk.castShadow = true;
-        this.scene.add(trunk);
-
-        const leavesHeight = 4 + Math.random() * 2;
-        const leavesGeometry = new THREE.ConeGeometry(1.5, leavesHeight, 8);
-        const leaves = new THREE.Mesh(leavesGeometry, treeMaterial);
-        leaves.position.set(x, trunkHeight + leavesHeight / 2, z);
-        leaves.castShadow = true;
-        this.scene.add(leaves);
+        
+        const tree = new THREE.Mesh(new THREE.BoxGeometry(1, 5, 1), new THREE.MeshPhongMaterial({ color: 0x228B22 }));
+        tree.position.set(x, 2.5, z);
+        tree.castShadow = true;
+        this.scene.add(tree);
+        this.roadMeshes.push(tree);
     }
   }
 
   private getQuadrant(position: THREE.Vector3) {
-    if (position.x >= 0 && position.z > 0) return 1;
-    if (position.x < 0 && position.z >= 0) return 2;
-    if (position.x <= 0 && position.z < 0) return 3;
-    if (position.x > 0 && position.z <= 0) return 4;
-    return 0; // Should not happen on the track
-  }
-  
-  private async loadSounds() {
-    await this.soundManager.loadSound('engine', '/audio/engine.wav', true);
-    await this.soundManager.loadSound('collision1', '/audio/collision 1.wav');
-    await this.soundManager.loadSound('collision2', '/audio/collision 2.wav');
-    await this.soundManager.loadSound('finish-line', '/audio/finishline.wav');
-    await this.soundManager.loadSound('drifting', '/audio/drifting.wav', true);
+    if (position.x > 0 && position.z > 0) return 1;
+    if (position.x < 0 && position.z > 0) return 2;
+    if (position.x < 0 && position.z < 0) return 3;
+    if (position.x > 0 && position.z < 0) return 4;
+    return 0;
   }
 
   private createTireMark(position: THREE.Vector3, rotation: THREE.Euler) {
-    const decalSize = new THREE.Vector3(0.5, 2, 0.5);
-    const decalRotation = new THREE.Euler(rotation.x - Math.PI / 2, rotation.y, rotation.z);
-    const decalGeometry = new DecalGeometry(this.road, position, decalRotation, decalSize);
-    const tireMark = new THREE.Mesh(decalGeometry, this.tireMarkMaterial);
-    this.scene.add(tireMark);
-
-    this.tireMarks.push(tireMark);
+    const decal = new THREE.Mesh(new DecalGeometry(this.road, position, rotation, new THREE.Vector3(0.5, 1, 1)), this.tireMarkMaterial);
+    this.scene.add(decal);
+    this.tireMarks.push(decal);
     if (this.tireMarks.length > 100) {
-      const oldMark = this.tireMarks.shift();
-      if (oldMark) {
-        this.scene.remove(oldMark);
-        oldMark.geometry.dispose();
+      const oldestMark = this.tireMarks.shift();
+      if (oldestMark) {
+        this.scene.remove(oldestMark);
+        oldestMark.geometry.dispose();
       }
     }
   }
 
   private handleLapEvents(events: LapSystemEvent[]) {
-    for(const event of events) {
+    for (const event of events) {
         switch(event.type) {
             case 'GAME_STATE_CHANGE':
                 this.setState(event.newState);
-                if (event.newState === GameState.RACE_OVER) {
-                    this.soundManager.playSound('finish-line');
-                    this.soundManager.stopSound('engine');
-                    this.soundManager.stopSound('drifting');
-                }
                 break;
-            case 'LAP_COMPLETED':
-                this.lapStartTime = Date.now();
+            case 'LAP_COMPLETED': {
                 const playerEntity = this.entityManager.getEntity('player')!;
                 const lapTracker = playerEntity.getComponent(LapTrackerComponent)!;
-                if (lapTracker.lap === config.race.laps) {
-                    showNotification('Final Lap!');
-                }
+                showNotification(`Lap ${lapTracker.lap} / ${config.race.laps}`);
+                this.lapStartTime = Date.now();
+                this.soundManager.playSound('finishline');
                 break;
+            }
             case 'FINAL_LAP':
-                 showNotification('Final Lap!');
-                 break;
+                showNotification('Final Lap!');
+                break;
             case 'WRONG_WAY':
                 showNotification('Wrong Way!', 2000);
                 break;
@@ -349,111 +327,93 @@ export class Game {
   }
 
   private handleCollisionEvents(events: CollisionEvent[]) {
-    for(const event of events) {
-        if(event.type === 'TRACK_COLLISION') {
-            const collisionSound = Math.random() > 0.5 ? 'collision1' : 'collision2';
-            this.soundManager.playSound(collisionSound);
-        }
+    if (events.some(e => e.type === 'TRACK_COLLISION')) {
+        this.soundManager.playSound('collision 1');
     }
   }
 
   private update() {
-    const deltaTime = 0; // Not used yet
+    const delta = 0.016;
     const allEntities = this.entityManager.getAllEntities();
-    
-    // --- Systems ---
-    this.inputSystem.update(allEntities, deltaTime);
-    this.physicsSystem.update(allEntities, deltaTime);
-    this.aiSystem.update(allEntities, deltaTime);
 
-    this.lapSystem.gameState = this.state;
-    this.lapSystem.update(allEntities, deltaTime);
-    this.handleLapEvents(this.lapSystem.getEvents());
+    if (this.state === GameState.PLAYING) {
+      this.inputSystem.update(allEntities, delta);
+      this.physicsSystem.update(allEntities, delta);
+      this.aiSystem.update(allEntities, delta);
 
-    this.collisionSystem.update(allEntities, deltaTime);
-    this.handleCollisionEvents(this.collisionSystem.getEvents());
-    this.cameraShakeIntensity = this.collisionSystem.cameraShakeIntensity;
+      this.lapSystem.gameState = this.state;
+      this.lapSystem.update(allEntities, delta);
+      this.handleLapEvents(this.lapSystem.getEvents());
 
-    // Get player entity and components for reuse
-    const playerEntity = this.entityManager.getEntity('player')!;
-    if (!playerEntity) return;
+      this.collisionSystem.update(allEntities, delta);
+      this.handleCollisionEvents(this.collisionSystem.getEvents());
+      this.cameraShakeIntensity = this.collisionSystem.cameraShakeIntensity;
+      
+      const playerEntity = this.entityManager.getEntity('player');
+      if (playerEntity) {
+        const playerTransform = playerEntity.getComponent(TransformComponent)!;
+        const playerPhysics = playerEntity.getComponent(PhysicsComponent)!;
+        const playerLapTracker = playerEntity.getComponent(LapTrackerComponent)!;
+        const aiEntity = this.entityManager.getEntity('ai');
+        const aiTransform = aiEntity?.getComponent(TransformComponent)!;
 
-    const playerTransform = playerEntity.getComponent(TransformComponent)!;
-    const playerPhysics = playerEntity.getComponent(PhysicsComponent)!;
-    const playerRender = playerEntity.getComponent(RenderComponent)!;
+        updateUI({
+            lap: playerLapTracker.lap,
+            elapsedTime: (Date.now() - this.raceStartTime) / 1000,
+            currentLapTime: (Date.now() - this.lapStartTime) / 1000,
+            speed: playerPhysics.speed,
+        });
 
-    // --- UI & Minimap ---
-    const elapsedTime = (Date.now() - this.raceStartTime) / 1000;
-    const currentLapTime = (Date.now() - this.lapStartTime) / 1000;
-    updateUI({
-      lap: playerEntity.getComponent(LapTrackerComponent)!.lap,
-      elapsedTime,
-      currentLapTime,
-      speed: playerPhysics.speed,
-    });
-    
-    const aiEntity = this.entityManager.getEntity('ai');
-    if (aiEntity) {
-        const aiTransform = aiEntity.getComponent(TransformComponent)!;
-        updateMinimap(playerTransform.position, aiTransform.position, config.track.radius);
-    }
-    
-    // --- Other Game Logic (Collision, Sound, etc.) ---
-    const previousPosition = playerTransform.position.clone();
+        if(aiTransform) updateMinimap(playerTransform.position, aiTransform.position, this.outerRadius);
 
-    // Engine sound
-    if (playerPhysics.acceleration !== 0 || Math.abs(playerPhysics.speed) > 0.05) {
-      this.soundManager.playSound('engine');
+        this.powerUpManager.update(playerEntity);
+        if (playerPhysics.isDrifting) {
+            this.soundManager.playSound('drifting');
+            const tireMarkRotation = playerTransform.rotation.clone();
+            tireMarkRotation.y += Math.PI / 2;
+            this.createTireMark(playerTransform.position.clone().setY(0.02), tireMarkRotation);
+        } else {
+            this.soundManager.stopSound('drifting');
+        }
+        const engineVolume = Math.max(0.1, Math.abs(playerPhysics.speed) / 0.2);
+        this.soundManager.setVolume('engine', engineVolume);
+        this.soundManager.playSound('engine');
+      }
     } else {
-      this.soundManager.stopSound('engine');
+      this.soundManager.stopAllSounds();
     }
-
-    // Tire marks & drifting sound
-    if (playerPhysics.isDrifting) {
-      this.createTireMark(
-        playerTransform.position.clone().sub(new THREE.Vector3(0, (playerRender.mesh.geometry as THREE.BoxGeometry).parameters.height / 2 - 0.01, 0)),
-        playerTransform.rotation
-      );
-      this.soundManager.playSound('drifting');
-    } else {
-      this.soundManager.stopSound('drifting');
-    }
-
-    // PowerUps
-    this.powerUpManager.update(playerEntity);
-
-    // Camera follow
-    const cameraOffset = new THREE.Vector3(0, 2, 5);
-    const cameraBehind = cameraOffset.clone().applyQuaternion(playerTransform.quaternion);
-    this.camera.position.copy(playerTransform.position.clone().add(cameraBehind));
-    this.camera.lookAt(playerTransform.position);
-
-    if (this.cameraShakeIntensity > 0) {
-      this.camera.position.x += (Math.random() - 0.5) * this.cameraShakeIntensity;
-      this.camera.position.y += (Math.random() - 0.5) * this.cameraShakeIntensity;
-      this.cameraShakeIntensity *= config.camera.shakeDecay;
-    }
-    
-    // --- Render System ---
-    this.renderSystem.update(allEntities, deltaTime);
   }
 
   private animate() {
     requestAnimationFrame(this.animate.bind(this));
+    const delta = 0.016;
     
-    switch (this.state) {
-        case GameState.MAIN_MENU:
-            const time = Date.now() * 0.0002;
-            this.camera.position.x = Math.sin(time) * 20;
-            this.camera.position.z = Math.cos(time) * 20;
-            this.camera.position.y = 10;
-            this.camera.lookAt(0, 0, 0);
-            break;
-        case GameState.PLAYING:
-            this.update();
-            break;
-        case GameState.RACE_OVER:
-            break;
+    if (this.state === GameState.PLAYING) {
+      this.update();
+    }
+    
+    this.renderSystem.update(this.entityManager.getAllEntities(), delta);
+
+    const playerEntity = this.entityManager.getEntity('player');
+    if (this.state === GameState.PLAYING && playerEntity) {
+        const playerTransform = playerEntity.getComponent(TransformComponent)!;
+        const cameraOffset = new THREE.Vector3(0, 2, 5);
+        const cameraBehind = cameraOffset.clone().applyQuaternion(playerTransform.quaternion);
+        this.camera.position.copy(playerTransform.position.clone().add(cameraBehind));
+        this.camera.lookAt(playerTransform.position);
+
+        if (this.cameraShakeIntensity > 0) {
+            this.camera.position.x += (Math.random() - 0.5) * this.cameraShakeIntensity;
+            this.camera.position.y += (Math.random() - 0.5) * this.cameraShakeIntensity;
+            this.cameraShakeIntensity *= config.camera.shakeDecay;
+            if (this.cameraShakeIntensity < 0.01) this.cameraShakeIntensity = 0;
+        }
+    } else if (this.state === GameState.MAIN_MENU) {
+        const time = Date.now() * 0.0002;
+        this.camera.position.x = Math.sin(time) * 20;
+        this.camera.position.z = Math.cos(time) * 20;
+        this.camera.position.y = 10;
+        this.camera.lookAt(0, 0, 0);
     }
 
     this.renderer.render(this.scene, this.camera);

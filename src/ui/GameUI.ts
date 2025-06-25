@@ -1,14 +1,22 @@
 export const startButton = document.getElementById('start-button');
 export const restartButton = document.getElementById('restart-button');
+export const startRaceButton = document.getElementById('start-race-button');
+export const backToMainMenuButton = document.getElementById(
+  'back-to-main-menu-button'
+);
 
 export function showMainMenu() {
     const mainMenu = document.querySelector('[data-testid="main-menu"]');
     const gameHud = document.querySelector('[data-testid="game-hud"]');
     const raceOverMenu = document.querySelector('[data-testid="race-over"]');
+    const mapSelectionMenu = document.querySelector(
+      '[data-testid="map-selection-menu"]'
+    );
     const minimap = document.getElementById('minimap');
     mainMenu?.classList.remove('hidden');
     gameHud?.classList.add('hidden');
     raceOverMenu?.classList.add('hidden');
+    mapSelectionMenu?.classList.add('hidden');
     minimap?.classList.add('hidden');
 }
 
@@ -16,10 +24,14 @@ export function showGameHud() {
     const mainMenu = document.querySelector('[data-testid="main-menu"]');
     const gameHud = document.querySelector('[data-testid="game-hud"]');
     const raceOverMenu = document.querySelector('[data-testid="race-over"]');
+    const mapSelectionMenu = document.querySelector(
+      '[data-testid="map-selection-menu"]'
+    );
     const minimap = document.getElementById('minimap');
     mainMenu?.classList.add('hidden');
     gameHud?.classList.remove('hidden');
     raceOverMenu?.classList.add('hidden');
+    mapSelectionMenu?.classList.add('hidden');
     minimap?.classList.remove('hidden');
 }
 
@@ -27,17 +39,61 @@ export function showRaceOverMenu(finalTime: number, totalLaps: number) {
     const mainMenu = document.querySelector('[data-testid="main-menu"]');
     const gameHud = document.querySelector('[data-testid="game-hud"]');
     const raceOverMenu = document.querySelector('[data-testid="race-over"]');
+    const mapSelectionMenu = document.querySelector(
+      '[data-testid="map-selection-menu"]'
+    );
     const minimap = document.getElementById('minimap');
     mainMenu?.classList.add('hidden');
     gameHud?.classList.add('hidden');
     raceOverMenu?.classList.remove('hidden');
+    mapSelectionMenu?.classList.add('hidden');
     minimap?.classList.add('hidden');
 
     const finalTimeElement = document.getElementById('final-time');
     const totalLapsElement = document.getElementById('total-laps');
 
-    if (finalTimeElement) finalTimeElement.innerText = `Final Time: ${finalTime.toFixed(2)}`;
-    if (totalLapsElement) totalLapsElement.innerText = `Laps Completed: ${totalLaps}`;
+    if (finalTimeElement) finalTimeElement.textContent = `Final Time: ${finalTime.toFixed(2)}`;
+    if (totalLapsElement) totalLapsElement.textContent = `Laps Completed: ${totalLaps}`;
+}
+
+export function showMapSelectionMenu() {
+  const mainMenu = document.querySelector('[data-testid="main-menu"]');
+  const gameHud = document.querySelector('[data-testid="game-hud"]');
+  const raceOverMenu = document.querySelector('[data-testid="race-over"]');
+  const mapSelectionMenu = document.querySelector(
+    '[data-testid="map-selection-menu"]'
+  );
+  const minimap = document.getElementById('minimap');
+  mainMenu?.classList.add('hidden');
+  gameHud?.classList.add('hidden');
+  raceOverMenu?.classList.add('hidden');
+  mapSelectionMenu?.classList.remove('hidden');
+  minimap?.classList.add('hidden');
+}
+
+export function populateMapList(maps: any[]) {
+  const mapList = document.getElementById('map-list');
+  if (!mapList) return;
+
+  mapList.innerHTML = ''; // Clear existing content
+
+  maps.forEach(map => {
+    const li = document.createElement('li');
+    li.dataset.mapId = map.id;
+    li.textContent = map.name;
+    li.style.cursor = 'pointer';
+    li.addEventListener('click', () => {
+      // Remove 'selected' class from all other list items
+      mapList.querySelectorAll('li').forEach(item => {
+        item.classList.remove('selected');
+        item.style.fontWeight = 'normal';
+      });
+      // Add 'selected' class to the clicked one
+      li.classList.add('selected');
+      li.style.fontWeight = 'bold';
+    });
+    mapList.appendChild(li);
+  });
 }
 
 export function updateUI(data: {
@@ -51,10 +107,10 @@ export function updateUI(data: {
     const lapTimeElement = document.getElementById('lap-time');
     const speedElement = document.getElementById('speed');
 
-    if (lapsElement) lapsElement.innerText = data.lap.toString();
-    if (timeElement) timeElement.innerText = data.elapsedTime.toFixed(2);
-    if (lapTimeElement) lapTimeElement.innerText = data.currentLapTime.toFixed(2);
-    if (speedElement) speedElement.innerText = (Math.abs(data.speed) * 100).toFixed(0);
+    if (lapsElement) lapsElement.textContent = data.lap.toString();
+    if (timeElement) timeElement.textContent = data.elapsedTime.toFixed(2);
+    if (lapTimeElement) lapTimeElement.textContent = data.currentLapTime.toFixed(2);
+    if (speedElement) speedElement.textContent = (Math.abs(data.speed) * 100).toFixed(0);
 }
 
 let notificationTimeout: number | undefined;
@@ -63,7 +119,7 @@ export function showNotification(message: string, duration = 3000) {
     const notificationElement = document.getElementById('notification');
     if (!notificationElement) return;
 
-    notificationElement.innerText = message;
+    notificationElement.textContent = message;
     notificationElement.classList.remove('hidden');
 
     if (notificationTimeout) {

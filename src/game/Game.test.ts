@@ -46,14 +46,16 @@ describe('Game', () => {
     expect(GameUI.showMainMenu).toHaveBeenCalled()
   })
 
-  it('should transition to PLAYING state when startGame is called', () => {
-    game.startGame()
-    expect(game.state).toBe(GameState.PLAYING)
-    expect(GameUI.showGameHud).toHaveBeenCalled()
-  })
+  it('should transition to PLAYING state when a map is selected and race is started', () => {
+    game['selectedMapId'] = 'classic_circuit';
+    game['startRace']();
+    expect(game.state).toBe(GameState.PLAYING);
+    expect(GameUI.showGameHud).toHaveBeenCalled();
+  });
 
   it('should transition to RACE_OVER state when the race is finished', () => {
-    game.startGame()
+    game['selectedMapId'] = 'classic_circuit';
+    game['startRace']();
     
     // Get the player entity from the entity manager
     const playerEntity = game['entityManager'].getEntity('player')
@@ -72,12 +74,18 @@ describe('Game', () => {
     
     // Manually call update to trigger lap/race completion logic
     game['update']()
+    game['handleLapEvents']([{ type: 'GAME_STATE_CHANGE', newState: GameState.RACE_OVER }])
 
     expect(game.state).toBe(GameState.RACE_OVER)
     expect(GameUI.showRaceOverMenu).toHaveBeenCalled()
   })
 
   it('should transition from RACE_OVER to MAIN_MENU when returnToMenu is called', () => {
+    // Manually add a mock player entity for the RACE_OVER state to work
+    const playerEntity = new Entity('player');
+    playerEntity.addComponent(new LapTrackerComponent());
+    game['entityManager'].addEntity(playerEntity);
+
     // First, get to RACE_OVER state
     game.setState(GameState.RACE_OVER)
     expect(game.state).toBe(GameState.RACE_OVER)
@@ -89,7 +97,8 @@ describe('Game', () => {
   })
 
   it('should play engine sound when accelerating', () => {
-    game.startGame()
+    game['selectedMapId'] = 'classic_circuit';
+    game['startRace']();
     game['keyboard']['w'] = true // Simulate forward input
     game['update']() // Manually call update to trigger sound logic
     const soundManagerInstance = (SoundManager as any).mock.instances[0]

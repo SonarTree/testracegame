@@ -51,6 +51,22 @@ class SoundManager {
       sound.setVolume(volume);
     }
   }
+
+  public stopAllSounds() {
+    this.sounds.forEach((sound) => {
+      if (sound.isPlaying) {
+        sound.stop();
+      }
+    });
+  }
+
+  public async loadSounds() {
+    await this.loadSound('engine', '/audio/engine.wav', true);
+    await this.loadSound('drifting', '/audio/drifting.wav', true);
+    await this.loadSound('collision 1', '/audio/collision 1.wav');
+    await this.loadSound('collision 2', '/audio/collision 2.wav');
+    await this.loadSound('finishline', '/audio/finishline.wav');
+  }
 }
 
 export default SoundManager; 

@@ -7,6 +7,7 @@ export class PowerUpManager {
   private scene: THREE.Scene
   private powerUps: PowerUp[] = []
   private spawnPositions: THREE.Vector3[]
+  private intervalId: number | undefined
 
   constructor(scene: THREE.Scene, spawnPositions: THREE.Vector3[]) {
     this.scene = scene
@@ -16,7 +17,19 @@ export class PowerUpManager {
   public start() {
     this.spawnPowerUp()
     // Spawn a new power-up every 10 seconds
-    setInterval(() => this.spawnPowerUp(), 10000)
+    this.intervalId = window.setInterval(() => this.spawnPowerUp(), 10000)
+  }
+
+  public stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = undefined;
+    }
+  }
+
+  public clearPowerUps() {
+    this.powerUps.forEach(p => this.scene.remove(p.mesh));
+    this.powerUps = [];
   }
 
   public update(playerEntity: Entity) {

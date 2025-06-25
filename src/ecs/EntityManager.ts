@@ -18,4 +18,8 @@ export class EntityManager {
   public getAllEntities(): Entity[] {
     return Array.from(this.entities.values());
   }
+
+  public clear(): void {
+    this.entities.clear();
+  }
 } 

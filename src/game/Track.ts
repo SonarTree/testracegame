@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { config } from '../config';
+import { TrackConfig } from './maps';
 
-export function createTrack(scene: THREE.Scene) {
-    const { radius, width, wallSegments, wallHeight, wallTubeRadius } = config.track;
+export function createTrack(scene: THREE.Scene, trackConfig: TrackConfig) {
+    const { radius, width, wallSegments, wallHeight, wallTubeRadius } = trackConfig;
     const innerRadius = radius - width / 2;
     const outerRadius = radius + width / 2;
 
