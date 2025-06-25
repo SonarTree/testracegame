@@ -19,6 +19,7 @@ export function createTrack(scene: THREE.Scene) {
     const roadMaterial = new THREE.MeshPhongMaterial({ color: 0x303030, side: THREE.DoubleSide });
     const road = new THREE.Mesh(roadGeometry, roadMaterial);
     road.rotation.x = -Math.PI / 2;
+    road.position.y = 0.01;
     road.receiveShadow = true;
     scene.add(road);
 
@@ -43,11 +44,9 @@ export function createTrack(scene: THREE.Scene) {
       new THREE.PlaneGeometry(width, 5),
       new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/checker.png') })
     );
-    finishLine.position.set(radius, 0.01, 0);
+    finishLine.position.set(radius, 0.02, 0);
     finishLine.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
     scene.add(finishLine);
     
-    const finishLinePlane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(1, 0, 0), finishLine.position);
-
-    return { ground, road, outerWall, innerWall, outerRadius, innerRadius, finishLine, finishLinePlane };
+    return { ground, road, outerWall, innerWall, outerRadius, innerRadius, finishLine };
 } 

@@ -31,7 +31,7 @@ describe('Track Module', () => {
     expect(trackPieces).toHaveProperty('outerWall');
     expect(trackPieces).toHaveProperty('innerWall');
     expect(trackPieces).toHaveProperty('finishLine');
-    expect(trackPieces).toHaveProperty('finishLinePlane');
+    expect(trackPieces).not.toHaveProperty('finishLinePlane');
     expect(trackPieces).toHaveProperty('outerRadius');
     expect(trackPieces).toHaveProperty('innerRadius');
     

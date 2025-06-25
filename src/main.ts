@@ -31,13 +31,17 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.getElementById('app')?.appendChild(renderer.domElement);
 
-const { road, innerRadius, outerRadius, finishLinePlane } = createTrack(scene);
+const { road, innerRadius, outerRadius } = createTrack(scene);
 const { car, vehicle } = createCar(scene);
-car.position.x = config.track.radius; // Place car on the track's centerline
+car.position.set(config.track.radius, 0.25, 0); // Place car on the track
+car.rotation.y = Math.PI; // Rotate to face correct direction
 
+let lap = 0;
+let passedHalfway = false;
+let lastQuadrant = 0; // For lap detection
 let gameStarted = false;
-let isDrifting = false;
-let boost = 0;
+let raceStartTime = 0;
+let lapStartTime = 0;
 let cameraShakeIntensity = 0;
 
 const tireMarks: THREE.Mesh[] = [];
@@ -50,14 +54,10 @@ const tireMarkMaterial = new THREE.MeshBasicMaterial({
     polygonOffsetFactor: -4,
 });
 
-let lap = 0;
-let raceStartTime = 0;
-let lapStartTime = 0;
-let previousPosition = car.position.clone();
-
 // AI Opponent
 const aiCar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0x0000ff }));
-aiCar.position.set(config.track.radius, 0, 2); // Start AI near player on the track
+aiCar.position.set(config.track.radius, 0.25, 2); // Start AI near player on the track
+aiCar.rotation.y = Math.PI; // Rotate to face correct direction
 aiCar.castShadow = true;
 scene.add(aiCar);
 
@@ -81,6 +81,14 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('keyup', (event) => {
   keyboard[event.key.toLowerCase()] = false;
 });
+
+function getQuadrant(position: THREE.Vector3) {
+    if (position.x >= 0 && position.z > 0) return 1;
+    if (position.x < 0 && position.z >= 0) return 2;
+    if (position.x <= 0 && position.z < 0) return 3;
+    if (position.x > 0 && position.z <= 0) return 4;
+    return 0; // Should not happen on the track
+}
 
 // Animation loop
 function animate() {
@@ -135,6 +143,26 @@ function animate() {
       createTireMark(car.position.clone().sub(new THREE.Vector3(0, car.geometry.parameters.height / 2 - 0.01, 0)));
   }
   
+  // Lap Detection using Quadrants
+  const currentQuadrant = getQuadrant(car.position);
+
+  if (currentQuadrant !== lastQuadrant) {
+      // Crossed from Q2 to Q3 (Halfway Point)
+      if (lastQuadrant === 2 && currentQuadrant === 3) {
+          passedHalfway = true;
+      }
+
+      // Crossed from Q4 to Q1 (Finish Line)
+      if (lastQuadrant === 4 && currentQuadrant === 1 && passedHalfway) {
+          if (Date.now() - lapStartTime > 3000) { // 3 second debounce
+              lap++;
+              lapStartTime = Date.now();
+              passedHalfway = false; // Reset for the next lap
+          }
+      }
+      lastQuadrant = currentQuadrant;
+  }
+
   // AI Car movement
   const aiSpeed = 0.08;
   const waypoint = waypoints[currentWaypointIndex];
