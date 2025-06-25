@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
 import { GameState } from './game/GameState';
 import { config } from './config';
-import { updateUI, showMainMenu, showGameHud, showRaceOverMenu, startButton, restartButton } from './ui/GameUI';
+import { updateUI, showMainMenu, showGameHud, showRaceOverMenu, startButton, restartButton, updateMinimap } from './ui/GameUI';
 import { createTrack } from './game/Track';
 import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
 
@@ -110,7 +110,7 @@ class Game {
     document.addEventListener('keyup', (event) => { this.keyboard[event.key.toLowerCase()] = false; });
 
     startButton?.addEventListener('click', () => this.startGame());
-    restartButton?.addEventListener('click', () => this.restartGame());
+    restartButton?.addEventListener('click', () => this.returnToMenu());
     
     this.setState(GameState.MAIN_MENU);
   }
@@ -143,16 +143,14 @@ class Game {
     this.lapStartTime = Date.now();
   }
   
-  public restartGame() {
+  public returnToMenu() {
     this.car.position.set(config.track.radius, 0.25, 0);
     this.car.rotation.y = Math.PI;
     this.vehicle.speed = 0;
     this.lap = 0;
     this.passedHalfway = false;
     this.lastQuadrant = this.getQuadrant(this.car.position);
-    this.raceStartTime = Date.now();
-    this.lapStartTime = Date.now();
-    this.setState(GameState.PLAYING);
+    this.setState(GameState.MAIN_MENU);
   }
 
   private getQuadrant(position: THREE.Vector3) {
@@ -190,6 +188,8 @@ class Game {
       currentLapTime,
       speed: this.vehicle.speed,
     });
+
+    updateMinimap(this.car.position, this.aiCar.position, config.track.radius);
 
     // --- Physics Simulation START ---
     const previousPosition = this.car.position.clone();
@@ -268,17 +268,18 @@ class Game {
     
     switch (this.state) {
         case GameState.MAIN_MENU:
-            const time = Date.now() * 0.0005;
-            this.camera.position.x = Math.sin(time) * 10;
-            this.camera.position.z = Math.cos(time) * 10;
-            this.camera.position.y = 5;
-            this.camera.lookAt(this.car.position);
+            // Rotating camera around the scene
+            const time = Date.now() * 0.0002;
+            this.camera.position.x = Math.sin(time) * 20;
+            this.camera.position.z = Math.cos(time) * 20;
+            this.camera.position.y = 10;
+            this.camera.lookAt(0, 0, 0);
             break;
         case GameState.PLAYING:
             this.update();
             break;
         case GameState.RACE_OVER:
-            // Render the race over screen
+            // Keep rendering the scene but don't update game logic
             break;
     }
 

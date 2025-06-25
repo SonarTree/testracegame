@@ -3,16 +3,16 @@ Objective: To create a proper game flow with different states, such as a main me
 
 To-Do List:
 
-[ ] Implement a Game State Manager:
+[x] Implement a Game State Manager:
 
 Create a simple state machine to handle different parts of the game (e.g., MainMenu, Playing, Paused, GameOver).
 This will replace the simple gameStarted boolean and allow for more complex game logic.
-[ ] Create a Main Menu:
+[x] Create a Main Menu:
 
 Design a simple main menu that appears when the game loads.
 Include a "Start Race" button that transitions the game to the Playing state.
 You can also add other options here later, like "Settings" or "Select Car."
-[ ] Develop a "Race Over" Screen:
+[x] Develop a "Race Over" Screen:
 
 When the race is finished (e.g., after a certain number of laps), transition to a GameOver state.
 Display the final race results, including the player's time and position.
@@ -22,7 +22,7 @@ Objective: To create a more immersive and user-friendly experience.
 
 To-Do List:
 
-[ ] Add a Minimap:
+[x] Add a Minimap:
 
 Create a 2D representation of the track and display the positions of the player and AI cars in real-time.
 [ ] Sound Effects:

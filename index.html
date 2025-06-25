@@ -18,6 +18,16 @@
         padding: 10px;
         border-radius: 5px;
       }
+      #minimap {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 200px;
+        height: 150px;
+        background-color: rgba(0,0,0,0.6);
+        border: 2px solid #555;
+        border-radius: 5px;
+      }
       .hidden {
         display: none;
       }
@@ -45,6 +55,7 @@
         <button id="restart-button">Restart</button>
       </div>
     </div>
+    <canvas id="minimap" class="hidden"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html> 
