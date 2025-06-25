@@ -34,16 +34,20 @@ const car = new THREE.Mesh(carGeometry, carMaterial);
 car.castShadow = true;
 scene.add(car);
 
-const carPhysics = {
-    velocity: new THREE.Vector3(),
-    engineForce: 0.015,
+// --- New Four-Wheel Physics Model ---
+const vehicle = {
+    speed: 0,
+    acceleration: 0,
+    steerAngle: 0,
+    wheelBase: 1.5, // Distance between front and rear axles
+
+    // Constants
+    maxSteer: Math.PI / 6,
+    enginePower: 0.01,
     brakingForce: 0.02,
-    sidewaysGrip: 0.9,
-    drag: 0.99,
-    turnSpeed: 0.025,
-    restitution: 0.4, // Bounciness
-    driftGrip: 0.6, // Less grip when drifting
-    driftTriggerSpeed: 0.6, // Speed needed to drift
+    friction: 0.99,
+    turnSpeed: 0.05, // How quickly the wheels turn
+    restitution: 0.4,
 };
 
 let gameStarted = false;
@@ -136,7 +140,7 @@ startButton?.addEventListener('click', () => {
 restartButton?.addEventListener('click', () => {
   car.position.set(0, 0, 0);
   car.rotation.set(0, 0, 0);
-  carPhysics.velocity.set(0, 0, 0);
+  vehicle.speed = 0;
   lap = 0;
   raceStartTime = Date.now();
   lapStartTime = Date.now();
@@ -203,55 +207,32 @@ function animate() {
   const forwardInput = (keyboard['w'] ? 1 : 0) - (keyboard['s'] ? 1 : 0);
   const turnInput = (keyboard['a'] ? 1 : 0) - (keyboard['d'] ? 1 : 0);
 
-  // 2. Update Rotation
-  const currentSpeed = carPhysics.velocity.length();
-  const turnAmount = turnInput * carPhysics.turnSpeed * Math.min(currentSpeed, 1.0);
-  car.rotation.y += turnAmount;
+  // 2. Update Steering Angle
+  vehicle.steerAngle = turnInput * vehicle.maxSteer;
 
-  // 3. Apply Engine/Braking Forces
+  // 3. Update Speed (Acceleration, Braking, Friction)
+  const currentAcceleration = forwardInput * vehicle.enginePower;
+  vehicle.speed += currentAcceleration;
+  
+  if (forwardInput < 0 && vehicle.speed > 0) {
+      vehicle.speed -= vehicle.brakingForce;
+  }
+  
+  vehicle.speed *= vehicle.friction;
+
+  // 4. Update Rotation & Position
+  // The rotation is now proportional to the steering input and the car's current speed.
+  // This is a stable approximation of Ackermann steering.
+  car.rotation.y += turnInput * vehicle.turnSpeed * (vehicle.speed / 1.0); // 1.0 is max speed placeholder
+
+  // Move the car forward in its new direction
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
-  const forwardVelocity = carPhysics.velocity.dot(forward);
-
-  if (forwardInput > 0) {
-      carPhysics.velocity.add(forward.multiplyScalar(carPhysics.engineForce));
-  } else if (forwardInput < 0) {
-      if (forwardVelocity > 0.01) {
-          // If moving forward, apply brakes opposite to the velocity direction
-          const brakeForce = carPhysics.velocity.clone().normalize().multiplyScalar(-carPhysics.brakingForce);
-          carPhysics.velocity.add(brakeForce);
-      } else {
-          // If stationary or moving backward, apply reverse thrust
-          carPhysics.velocity.add(forward.multiplyScalar(-carPhysics.engineForce * 0.7));
-      }
-  }
-
-  // 4. Apply Friction & Drifting
-  const wasDrifting = isDrifting;
-  isDrifting = currentSpeed > carPhysics.driftTriggerSpeed && turnInput !== 0;
-
-  const localVelocity = carPhysics.velocity.clone().applyQuaternion(car.quaternion.clone().invert());
-
-  if (isDrifting) {
-      localVelocity.x *= carPhysics.driftGrip;
-      boost += 0.002; // Accumulate boost
-  } else {
-      localVelocity.x *= carPhysics.sidewaysGrip;
-      if (wasDrifting) { // Apply boost when drift ends
-          const forwardBoost = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion).multiplyScalar(boost);
-          carPhysics.velocity.add(forwardBoost);
-          boost = 0;
-      }
-  }
-  localVelocity.z *= carPhysics.drag;
-  carPhysics.velocity.copy(localVelocity.applyQuaternion(car.quaternion));
+  car.position.add(forward.multiplyScalar(vehicle.speed));
   
   // Tire marks
-  if (isDrifting) {
+  if (vehicle.steerAngle !== 0) {
       createTireMark(car.position.clone().sub(new THREE.Vector3(0, car.geometry.parameters.height / 2 - 0.01, 0)));
   }
-  
-  // 5. Update Position
-  car.position.add(carPhysics.velocity);
   
   // 6. Collision Detection
   const carBBoxAfterMove = new THREE.Box3().setFromObject(car);
@@ -259,7 +240,7 @@ function animate() {
       const wallBBox = new THREE.Box3().setFromObject(wall.mesh);
       if (carBBoxAfterMove.intersectsBox(wallBBox)) {
           car.position.copy(previousPosition);
-          carPhysics.velocity.reflect(wall.normal).multiplyScalar(carPhysics.restitution);
+          vehicle.speed *= -vehicle.restitution; // Bounce back
           cameraShakeIntensity = 0.2;
           break;
       }
@@ -268,7 +249,7 @@ function animate() {
   // --- Physics Simulation END ---
 
   // Update UI
-  if (speedElement) speedElement.innerText = (carPhysics.velocity.length() * 200).toFixed(0);
+  if (speedElement) speedElement.innerText = (Math.abs(vehicle.speed) * 100).toFixed(0);
 
   // AI Car movement
   const aiSpeed = 0.08;
