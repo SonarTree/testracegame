@@ -15,8 +15,9 @@ import {
 import { createTrack } from './game/Track';
 import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
 import SoundManager from './game/SoundManager';
+import { AIController } from './game/AIController';
 
-class Game {
+export class Game {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
@@ -41,8 +42,7 @@ class Game {
   private tireMarkMaterial: THREE.MeshBasicMaterial;
 
   private aiCar!: THREE.Mesh;
-  private waypoints: THREE.Vector3[] = [];
-  private currentWaypointIndex = 0;
+  private aiController!: AIController;
 
   private keyboard: { [key: string]: boolean } = {};
 
@@ -122,12 +122,18 @@ class Game {
     this.scene.add(this.aiCar);
 
     const numWaypoints = 32;
+    const waypoints: THREE.Vector3[] = [];
     for (let i = 0; i < numWaypoints; i++) {
       const angle = (i / numWaypoints) * 2 * Math.PI;
-      this.waypoints.push(
-        new THREE.Vector3(Math.cos(angle) * config.track.radius, 0, Math.sin(angle) * config.track.radius)
+      waypoints.push(
+        new THREE.Vector3(
+          Math.cos(angle) * config.track.radius,
+          0,
+          Math.sin(angle) * config.track.radius
+        )
       );
     }
+    this.aiController = new AIController(this.aiCar, waypoints);
     
     // Event Listeners
     window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -299,18 +305,7 @@ class Game {
       this.lastQuadrant = currentQuadrant;
     }
 
-    // AI Car movement
-    const aiSpeed = 0.08;
-    const nextWaypoint = this.waypoints[this.currentWaypointIndex];
-    const distanceToWaypoint = this.aiCar.position.distanceTo(nextWaypoint);
-
-    if (distanceToWaypoint < 1) {
-      this.currentWaypointIndex = (this.currentWaypointIndex + 1) % this.waypoints.length;
-    } else {
-      const direction = nextWaypoint.clone().sub(this.aiCar.position).normalize();
-      this.aiCar.position.add(direction.multiplyScalar(aiSpeed));
-      this.aiCar.lookAt(nextWaypoint);
-    }
+    this.aiController.update();
 
     // Make camera follow the car
     const cameraOffset = new THREE.Vector3(0, 2, 5);
@@ -349,6 +344,4 @@ class Game {
 
     this.renderer.render(this.scene, this.camera);
   }
-}
-
-export default Game; 
+} 
