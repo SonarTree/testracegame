@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import * as THREE from 'three'
 import { createPowerUp } from './PowerUp'
-import { Vehicle } from './Car'
+import { Entity } from '../ecs/Entity'
+import { PhysicsComponent } from '../ecs/components/PhysicsComponent'
 
 describe('PowerUp Module', () => {
   it('should create a speed-boost power-up with the correct properties', () => {
@@ -16,11 +17,16 @@ describe('PowerUp Module', () => {
   it('should apply a speed-boost effect correctly', () => {
     const position = new THREE.Vector3(0, 0, 0)
     const powerUp = createPowerUp('speed-boost', position)
-    const vehicle: Vehicle = { speed: 0.1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 }
+    
+    // Create a mock entity with a PhysicsComponent
+    const physicsComponent = new PhysicsComponent(0.1, 0, 0, 1.5)
+    const mockEntity = new Entity('test')
+    mockEntity.addComponent(physicsComponent)
 
-    powerUp.applyEffect({} as any, vehicle)
+    powerUp.applyEffect(mockEntity)
 
-    expect(vehicle.speed).toBeCloseTo(0.6)
+    // The speed should be increased by 0.5
+    expect(physicsComponent.speed).toBeCloseTo(0.6)
   })
 
   it('should create a shield power-up', () => {

@@ -30,6 +30,7 @@ import { PhysicsSystem } from './ecs/systems/PhysicsSystem';
 import { AISystem } from './ecs/systems/AISystem';
 import { LapSystem, LapSystemEvent } from './ecs/systems/LapSystem';
 import { RenderSystem } from './ecs/systems/RenderSystem';
+import { CollisionSystem, CollisionEvent } from './ecs/systems/CollisionSystem';
 
 export class Game {
   private scene: THREE.Scene;
@@ -45,6 +46,7 @@ export class Game {
   private aiSystem: AISystem;
   private lapSystem: LapSystem;
   private renderSystem: RenderSystem;
+  private collisionSystem: CollisionSystem;
 
   private road!: THREE.Mesh;
   private innerRadius!: number;
@@ -74,6 +76,7 @@ export class Game {
     this.aiSystem = new AISystem();
     this.lapSystem = new LapSystem();
     this.renderSystem = new RenderSystem();
+    this.collisionSystem = null!;
 
     this.tireMarkMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
@@ -135,6 +138,9 @@ export class Game {
     this.road = road;
     this.innerRadius = innerRadius;
     this.outerRadius = outerRadius;
+
+    // Now that we have the radii, we can create the collision system
+    this.collisionSystem = new CollisionSystem(this.innerRadius, this.outerRadius);
 
     this.createTrees();
 
@@ -342,6 +348,15 @@ export class Game {
     }
   }
 
+  private handleCollisionEvents(events: CollisionEvent[]) {
+    for(const event of events) {
+        if(event.type === 'TRACK_COLLISION') {
+            const collisionSound = Math.random() > 0.5 ? 'collision1' : 'collision2';
+            this.soundManager.playSound(collisionSound);
+        }
+    }
+  }
+
   private update() {
     const deltaTime = 0; // Not used yet
     const allEntities = this.entityManager.getAllEntities();
@@ -354,6 +369,10 @@ export class Game {
     this.lapSystem.gameState = this.state;
     this.lapSystem.update(allEntities, deltaTime);
     this.handleLapEvents(this.lapSystem.getEvents());
+
+    this.collisionSystem.update(allEntities, deltaTime);
+    this.handleCollisionEvents(this.collisionSystem.getEvents());
+    this.cameraShakeIntensity = this.collisionSystem.cameraShakeIntensity;
 
     // Get player entity and components for reuse
     const playerEntity = this.entityManager.getEntity('player')!;
@@ -381,16 +400,6 @@ export class Game {
     
     // --- Other Game Logic (Collision, Sound, etc.) ---
     const previousPosition = playerTransform.position.clone();
-
-    // Collision Detection (Track boundaries)
-    const carRadius = playerTransform.position.length();
-    if (carRadius > this.outerRadius || carRadius < this.innerRadius) {
-      playerTransform.position.copy(previousPosition);
-      playerPhysics.speed *= -config.vehicle.restitution;
-      this.cameraShakeIntensity = config.camera.shakeIntensity;
-      const collisionSound = Math.random() > 0.5 ? 'collision1' : 'collision2';
-      this.soundManager.playSound(collisionSound);
-    }
 
     // Engine sound
     if (playerPhysics.acceleration !== 0 || Math.abs(playerPhysics.speed) > 0.05) {

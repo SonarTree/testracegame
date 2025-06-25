@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as THREE from 'three'
 import { PowerUpManager } from './PowerUpManager'
 import * as PowerUpModule from './PowerUp'
-import { Car, Vehicle } from './Car'
+import { Entity } from '../ecs/Entity'
+import { TransformComponent } from '../ecs/components/TransformComponent'
 
 vi.mock('./PowerUp', () => ({
   createPowerUp: vi.fn(),
@@ -11,10 +12,10 @@ vi.mock('./PowerUp', () => ({
 describe('PowerUpManager', () => {
   let scene: THREE.Scene
   let manager: PowerUpManager
-  let car: Car
-  let vehicle: Vehicle
+  let playerEntity: Entity
 
   beforeEach(() => {
+    vi.clearAllMocks()
     scene = new THREE.Scene()
     vi.spyOn(scene, 'add')
     vi.spyOn(scene, 'remove')
@@ -22,14 +23,16 @@ describe('PowerUpManager', () => {
     const spawnPositions = [new THREE.Vector3(0, 0, 0)]
     manager = new PowerUpManager(scene, spawnPositions)
 
-    car = new THREE.Mesh() as Car
-    vehicle = { speed: 0.1, acceleration: 0, steerAngle: 0, wheelBase: 1.5 }
+    // Create a mock player entity
+    playerEntity = new Entity('player')
+    playerEntity.addComponent(new TransformComponent(new THREE.Vector3(), new THREE.Quaternion(), new THREE.Euler()))
   })
 
   it('should spawn a power-up on start', () => {
     const mockPowerUp = {
       mesh: new THREE.Mesh(),
       applyEffect: vi.fn(),
+      removeEffect: vi.fn(),
     }
     ;(PowerUpModule.createPowerUp as any).mockReturnValue(mockPowerUp)
 
@@ -48,13 +51,12 @@ describe('PowerUpManager', () => {
     }
     ;(PowerUpModule.createPowerUp as any).mockReturnValue(mockPowerUp)
 
-    manager.start() // Spawns the power-up
+    manager.start() // Spawns the power-up at (0,0,0)
 
-    // Move car to the power-up's position
-    car.position.set(0, 0, 0)
-    manager.update(car, vehicle)
+    // The player entity starts at (0,0,0) so it's on top of the power-up
+    manager.update(playerEntity)
 
-    expect(mockPowerUp.applyEffect).toHaveBeenCalledWith(car, vehicle)
+    expect(mockPowerUp.applyEffect).toHaveBeenCalledWith(playerEntity)
     expect(scene.remove).toHaveBeenCalledWith(mockPowerUp.mesh)
   })
 }) 

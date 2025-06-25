@@ -4,6 +4,10 @@ import { Game } from '../Game'
 import * as GameUI from '../ui/GameUI'
 import SoundManager from './SoundManager'
 import { GameState } from './GameState'
+import { Entity } from '../ecs/Entity'
+import { LapTrackerComponent } from '../ecs/components/LapTrackerComponent'
+import { TransformComponent } from '../ecs/components/TransformComponent'
+import { config } from '../config'
 
 // Mock the UI and SoundManager modules
 vi.mock('../ui/GameUI')
@@ -21,6 +25,10 @@ vi.mock('three', async (importOriginal) => {
         enabled: false,
       },
     }),
+    CubeTextureLoader: vi.fn().mockReturnValue({
+      setPath: vi.fn().mockReturnThis(),
+      load: vi.fn().mockReturnValue({}),
+    })
   }
 })
 
@@ -45,31 +53,40 @@ describe('Game', () => {
   })
 
   it('should transition to RACE_OVER state when the race is finished', () => {
-    game.startGame();
-    game['lap'] = 3; // Simulate being on the final lap
-    game['passedHalfway'] = true; // Simulate passing the halfway mark
-    game['lastQuadrant'] = 4;
+    game.startGame()
     
-    // Simulate crossing the finish line
-    const carPosition = new THREE.Vector3(1, 0, 1);
-    game['car'].position.copy(carPosition);
+    // Get the player entity from the entity manager
+    const playerEntity = game['entityManager'].getEntity('player')
+    expect(playerEntity).toBeDefined()
 
-    game['update'](); // Manually call update to trigger lap/race completion logic
+    // Modify components to simulate the final lap conditions
+    const lapTracker = playerEntity!.getComponent(LapTrackerComponent)!
+    const transform = playerEntity!.getComponent(TransformComponent)!
+    
+    lapTracker.lap = config.race.laps
+    lapTracker.passedHalfway = true
+    lapTracker.lastQuadrant = 4
+    
+    // Simulate crossing the finish line by moving to quadrant 1
+    transform.position.set(1, 0, 1)
+    
+    // Manually call update to trigger lap/race completion logic
+    game['update']()
 
-    expect(game.state).toBe(GameState.RACE_OVER);
-    expect(GameUI.showRaceOverMenu).toHaveBeenCalled();
-  });
+    expect(game.state).toBe(GameState.RACE_OVER)
+    expect(GameUI.showRaceOverMenu).toHaveBeenCalled()
+  })
 
   it('should transition from RACE_OVER to MAIN_MENU when returnToMenu is called', () => {
     // First, get to RACE_OVER state
-    game.setState(GameState.RACE_OVER);
-    expect(game.state).toBe(GameState.RACE_OVER);
+    game.setState(GameState.RACE_OVER)
+    expect(game.state).toBe(GameState.RACE_OVER)
 
     // Then, return to the main menu
-    game.returnToMenu();
-    expect(game.state).toBe(GameState.MAIN_MENU);
-    expect(GameUI.showMainMenu).toHaveBeenCalledTimes(2); // Once on init, once on return
-  });
+    game.returnToMenu()
+    expect(game.state).toBe(GameState.MAIN_MENU)
+    expect(GameUI.showMainMenu).toHaveBeenCalledTimes(2) // Once on init, once on return
+  })
 
   it('should play engine sound when accelerating', () => {
     game.startGame()
