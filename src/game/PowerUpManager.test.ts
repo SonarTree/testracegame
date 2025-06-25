@@ -49,8 +49,12 @@ describe('PowerUpManager', () => {
     // start() calls spawnPowerUp once immediately
     expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(1);
 
-    // Advance time to trigger the interval twice
-    vi.advanceTimersByTime(20000);
+    // Advance time for the first interval
+    vi.advanceTimersByTime(10000);
+    expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(2);
+    
+    // Advance time for the second interval
+    vi.advanceTimersByTime(10000);
     expect(PowerUpModule.createPowerUp).toHaveBeenCalledTimes(3);
   });
 
