@@ -2,7 +2,16 @@ import * as THREE from 'three';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
 import { GameState } from './game/GameState';
 import { config } from './config';
-import { updateUI, showMainMenu, showGameHud, showRaceOverMenu, startButton, restartButton, updateMinimap } from './ui/GameUI';
+import {
+  updateUI,
+  showMainMenu,
+  showGameHud,
+  showRaceOverMenu,
+  startButton,
+  restartButton,
+  updateMinimap,
+  showNotification,
+} from './ui/GameUI';
 import { createTrack } from './game/Track';
 import { createCar, updateCarPhysics, Car, Vehicle } from './game/Car';
 import SoundManager from './game/SoundManager';
@@ -26,6 +35,7 @@ class Game {
   private raceStartTime = 0;
   private lapStartTime = 0;
   private cameraShakeIntensity = 0;
+  private isGoingWrongWay = false;
 
   private tireMarks: THREE.Mesh[] = [];
   private tireMarkMaterial: THREE.MeshBasicMaterial;
@@ -248,39 +258,58 @@ class Game {
 
     // Lap Detection using Quadrants
     const currentQuadrant = this.getQuadrant(this.car.position);
-
     if (currentQuadrant !== this.lastQuadrant) {
-      if (this.lastQuadrant === 2 && currentQuadrant === 3) {
-        this.passedHalfway = true;
+      // Wrong Way Detection
+      const isForward = currentQuadrant === (this.lastQuadrant % 4) + 1;
+      const isBackward = this.lastQuadrant === (currentQuadrant % 4) + 1;
+
+      if (isBackward) {
+        this.passedHalfway = false; // Invalidate lap progress on any backward movement
+        if (this.state === GameState.PLAYING && !this.isGoingWrongWay) {
+          showNotification('Wrong Way!', 2000);
+          this.isGoingWrongWay = true;
+        }
+      } else if (isForward) {
+        this.isGoingWrongWay = false;
       }
 
-      if (this.lastQuadrant === 4 && currentQuadrant === 1 && this.passedHalfway) {
-        if (Date.now() - this.lapStartTime > 3000) {
-          this.lap++;
-          this.lapStartTime = Date.now();
-          this.passedHalfway = false;
-          if (this.lap >= config.race.laps) {
+      if (currentQuadrant === 1 && this.lastQuadrant === 4) {
+        // Crossed finish line
+        if (this.passedHalfway) {
+          // Check for race completion BEFORE incrementing lap
+          if (this.lap === config.race.laps) {
             this.setState(GameState.RACE_OVER);
             this.soundManager.playSound('finish-line');
             this.soundManager.stopSound('engine');
             this.soundManager.stopSound('drifting');
+            return; // Stop further processing this frame
+          }
+
+          this.lap++;
+          this.lapStartTime = Date.now();
+          this.passedHalfway = false;
+
+          if (this.lap === config.race.laps) {
+            showNotification('Final Lap!');
           }
         }
+      } else if (currentQuadrant === 3 && this.lastQuadrant === 2) {
+        this.passedHalfway = true;
       }
       this.lastQuadrant = currentQuadrant;
     }
 
     // AI Car movement
     const aiSpeed = 0.08;
-    const waypoint = this.waypoints[this.currentWaypointIndex];
-    const distanceToWaypoint = this.aiCar.position.distanceTo(waypoint);
+    const nextWaypoint = this.waypoints[this.currentWaypointIndex];
+    const distanceToWaypoint = this.aiCar.position.distanceTo(nextWaypoint);
 
     if (distanceToWaypoint < 1) {
       this.currentWaypointIndex = (this.currentWaypointIndex + 1) % this.waypoints.length;
     } else {
-      const direction = waypoint.clone().sub(this.aiCar.position).normalize();
+      const direction = nextWaypoint.clone().sub(this.aiCar.position).normalize();
       this.aiCar.position.add(direction.multiplyScalar(aiSpeed));
-      this.aiCar.lookAt(waypoint);
+      this.aiCar.lookAt(nextWaypoint);
     }
 
     // Make camera follow the car

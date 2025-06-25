@@ -57,6 +57,25 @@ export function updateUI(data: {
     if (speedElement) speedElement.innerText = (Math.abs(data.speed) * 100).toFixed(0);
 }
 
+let notificationTimeout: number | undefined;
+
+export function showNotification(message: string, duration = 3000) {
+    const notificationElement = document.getElementById('notification');
+    if (!notificationElement) return;
+
+    notificationElement.innerText = message;
+    notificationElement.classList.remove('hidden');
+
+    if (notificationTimeout) {
+        clearTimeout(notificationTimeout);
+    }
+
+    notificationTimeout = window.setTimeout(() => {
+        notificationElement.classList.add('hidden');
+        notificationTimeout = undefined;
+    }, duration);
+}
+
 export function updateMinimap(
     playerPos: { x: number; z: number },
     aiPos: { x: number; z: number },

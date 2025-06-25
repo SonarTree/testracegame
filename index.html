@@ -31,9 +31,25 @@
       .hidden {
         display: none;
       }
+      #notification {
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 3em;
+        font-weight: bold;
+        color: yellow;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        z-index: 100;
+        pointer-events: none; /* So it doesn't block clicks */
+      }
     </style>
   </head>
   <body>
+    <div id="notification" class="hidden"></div>
     <div id="app"></div>
     <div id="ui">
       <div id="main-menu" data-testid="main-menu">

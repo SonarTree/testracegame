@@ -32,7 +32,7 @@ Engine sounds (idle, accelerating, max speed)
 Collisions
 Drifting
 Crossing the finish line
-[ ] On-Screen Notifications:
+[x] On-Screen Notifications:
 
 Display messages like "Wrong Way!" if the player is going in the wrong direction, or "Final Lap!"
 Phase 3: Gameplay and Content Expansion
