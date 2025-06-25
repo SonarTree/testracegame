@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
+import { config } from './config';
+import { updateUI, startButton, restartButton } from './ui/GameUI';
+import { createTrack } from './game/Track';
+import { createCar, updateCarPhysics } from './game/Car';
 
 // Scene
 const scene = new THREE.Scene();
@@ -27,28 +31,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.getElementById('app')?.appendChild(renderer.domElement);
 
-// Car
-const carGeometry = new THREE.BoxGeometry(1, 0.5, 2);
-const carMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-const car = new THREE.Mesh(carGeometry, carMaterial);
-car.castShadow = true;
-scene.add(car);
-
-// --- New Four-Wheel Physics Model ---
-const vehicle = {
-    speed: 0,
-    acceleration: 0,
-    steerAngle: 0,
-    wheelBase: 1.5, // Distance between front and rear axles
-
-    // Constants
-    maxSteer: Math.PI / 6,
-    enginePower: 0.01,
-    brakingForce: 0.02,
-    friction: 0.99,
-    turnSpeed: 0.05, // How quickly the wheels turn
-    restitution: 0.4,
-};
+const { ground, walls, finishLinePlane } = createTrack(scene);
+const { car, vehicle } = createCar(scene);
 
 let gameStarted = false;
 let isDrifting = false;
@@ -65,86 +49,10 @@ const tireMarkMaterial = new THREE.MeshBasicMaterial({
     polygonOffsetFactor: -4,
 });
 
-// Ground
-const groundGeometry = new THREE.PlaneGeometry(100, 100);
-const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x404040, side: THREE.DoubleSide });
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// Track walls
-const wallMaterial = new THREE.MeshPhongMaterial({ color: 0xa0a0a0 });
-
-const wall1 = new THREE.Mesh(new THREE.BoxGeometry(100, 2, 2), wallMaterial);
-wall1.position.z = -20;
-wall1.castShadow = true;
-wall1.receiveShadow = true;
-scene.add(wall1);
-
-const wall2 = new THREE.Mesh(new THREE.BoxGeometry(100, 2, 2), wallMaterial);
-wall2.position.z = 20;
-wall2.castShadow = true;
-wall2.receiveShadow = true;
-scene.add(wall2);
-
-const wall3 = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 40), wallMaterial);
-wall3.position.x = -50;
-wall3.castShadow = true;
-wall3.receiveShadow = true;
-scene.add(wall3);
-
-const wall4 = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 40), wallMaterial);
-wall4.position.x = 50;
-wall4.castShadow = true;
-wall4.receiveShadow = true;
-scene.add(wall4);
-
-const walls = [
-    { mesh: wall1, normal: new THREE.Vector3(0, 0, 1) },
-    { mesh: wall2, normal: new THREE.Vector3(0, 0, -1) },
-    { mesh: wall3, normal: new THREE.Vector3(1, 0, 0) },
-    { mesh: wall4, normal: new THREE.Vector3(-1, 0, 0) },
-];
-
-// Start/Finish Line
-const finishLine = new THREE.Mesh(
-  new THREE.PlaneGeometry(10, 5),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/checker.png') })
-);
-finishLine.position.z = 0;
-finishLine.position.x = -45;
-finishLine.rotation.y = Math.PI / 2;
-scene.add(finishLine);
-const finishLinePlane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(1, 0, 0), finishLine.position);
-
 let lap = 0;
 let raceStartTime = 0;
 let lapStartTime = 0;
 let previousPosition = car.position.clone();
-
-const lapsElement = document.getElementById('laps');
-const timeElement = document.getElementById('time');
-const lapTimeElement = document.getElementById('lap-time');
-const speedElement = document.getElementById('speed');
-const startButton = document.getElementById('start-button');
-const restartButton = document.getElementById('restart-button');
-
-startButton?.addEventListener('click', () => {
-  gameStarted = true;
-  raceStartTime = Date.now();
-  lapStartTime = Date.now();
-  startButton.style.display = 'none';
-});
-
-restartButton?.addEventListener('click', () => {
-  car.position.set(0, 0, 0);
-  car.rotation.set(0, 0, 0);
-  vehicle.speed = 0;
-  lap = 0;
-  raceStartTime = Date.now();
-  lapStartTime = Date.now();
-});
 
 // AI Opponent
 const aiCarGeometry = new THREE.BoxGeometry(1, 0.5, 2);
@@ -197,60 +105,42 @@ function animate() {
   const elapsedTime = (Date.now() - raceStartTime) / 1000;
   const currentLapTime = (Date.now() - lapStartTime) / 1000;
 
-  if (lapsElement) lapsElement.innerText = lap.toString();
-  if (timeElement) timeElement.innerText = elapsedTime.toFixed(2);
-  if (lapTimeElement) lapTimeElement.innerText = currentLapTime.toFixed(2);
+  updateUI({
+    lap,
+    elapsedTime,
+    currentLapTime,
+    speed: vehicle.speed,
+  });
 
   // --- Physics Simulation START ---
+  const previousPosition = car.position.clone();
 
   // 1. Get Player Input
   const forwardInput = (keyboard['w'] ? 1 : 0) - (keyboard['s'] ? 1 : 0);
   const turnInput = (keyboard['a'] ? 1 : 0) - (keyboard['d'] ? 1 : 0);
 
-  // 2. Update Steering Angle
-  vehicle.steerAngle = turnInput * vehicle.maxSteer;
-
-  // 3. Update Speed (Acceleration, Braking, Friction)
-  const currentAcceleration = forwardInput * vehicle.enginePower;
-  vehicle.speed += currentAcceleration;
+  // The core physics logic is now in this one function call
+  const movement = updateCarPhysics(car, vehicle, { forward: forwardInput, turn: turnInput });
   
-  if (forwardInput < 0 && vehicle.speed > 0) {
-      vehicle.speed -= vehicle.brakingForce;
-  }
-  
-  vehicle.speed *= vehicle.friction;
+  // --- Physics Simulation END ---
 
-  // 4. Update Rotation & Position
-  // The rotation is now proportional to the steering input and the car's current speed.
-  // This is a stable approximation of Ackermann steering.
-  car.rotation.y += turnInput * vehicle.turnSpeed * (vehicle.speed / 1.0); // 1.0 is max speed placeholder
-
-  // Move the car forward in its new direction
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
-  car.position.add(forward.multiplyScalar(vehicle.speed));
-  
   // Tire marks
   if (vehicle.steerAngle !== 0) {
       createTireMark(car.position.clone().sub(new THREE.Vector3(0, car.geometry.parameters.height / 2 - 0.01, 0)));
   }
   
-  // 6. Collision Detection
-  const carBBoxAfterMove = new THREE.Box3().setFromObject(car);
+  // 5. Collision Detection
+  const carBBox = new THREE.Box3().setFromObject(car);
   for (const wall of walls) {
       const wallBBox = new THREE.Box3().setFromObject(wall.mesh);
-      if (carBBoxAfterMove.intersectsBox(wallBBox)) {
+      if (carBBox.intersectsBox(wallBBox)) {
           car.position.copy(previousPosition);
-          vehicle.speed *= -vehicle.restitution; // Bounce back
-          cameraShakeIntensity = 0.2;
+          vehicle.speed *= -config.vehicle.restitution;
+          cameraShakeIntensity = config.camera.shakeIntensity;
           break;
       }
   }
   
-  // --- Physics Simulation END ---
-
-  // Update UI
-  if (speedElement) speedElement.innerText = (Math.abs(vehicle.speed) * 100).toFixed(0);
-
   // AI Car movement
   const aiSpeed = 0.08;
   const waypoint = waypoints[currentWaypointIndex];
@@ -278,7 +168,7 @@ function animate() {
   if (cameraShakeIntensity > 0) {
     camera.position.x += (Math.random() - 0.5) * cameraShakeIntensity;
     camera.position.y += (Math.random() - 0.5) * cameraShakeIntensity;
-    cameraShakeIntensity *= 0.9; // Decay shake
+    cameraShakeIntensity *= config.camera.shakeDecay;
   }
 
   previousPosition.copy(car.position);
@@ -301,5 +191,21 @@ function createTireMark(position: THREE.Vector3) {
     }
   }
 }
+
+startButton?.addEventListener('click', () => {
+  gameStarted = true;
+  raceStartTime = Date.now();
+  lapStartTime = Date.now();
+  if (startButton) startButton.style.display = 'none';
+});
+
+restartButton?.addEventListener('click', () => {
+  car.position.set(0, 0, 0);
+  car.rotation.set(0, 0, 0);
+  vehicle.speed = 0;
+  lap = 0;
+  raceStartTime = Date.now();
+  lapStartTime = Date.now();
+});
 
 animate(); 
