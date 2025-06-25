@@ -9,7 +9,7 @@ vi.mock('three', async () => {
     return {
         ...originalThree,
         TextureLoader: vi.fn().mockImplementation(() => ({
-            load: vi.fn(),
+            load: vi.fn().mockReturnValue(new originalThree.Texture()),
         })),
     };
 });

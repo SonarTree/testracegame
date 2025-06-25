@@ -74,7 +74,14 @@ export class Game {
 
   private async init() {
     // Scene setup
-    this.scene.background = new THREE.Color(0xabcdef);
+    const loader = new THREE.CubeTextureLoader();
+    loader.setPath('/textures/skybox/'); // Relative to /public
+    const textureCube = loader.load([
+      'px.jpg', 'nx.jpg',
+      'py.jpg', 'ny.jpg',
+      'pz.jpg', 'nz.jpg'
+    ]);
+    this.scene.background = textureCube;
 
     // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -109,6 +116,8 @@ export class Game {
     this.innerRadius = innerRadius;
     this.outerRadius = outerRadius;
 
+    this.createTrees();
+
     // Car
     const { car, vehicle } = createCar(this.scene);
     this.car = car;
@@ -135,7 +144,7 @@ export class Game {
         )
       );
     }
-    this.aiController = new AIController(this.aiCar, waypoints);
+    this.aiController = new AIController(this.aiCar, this.car, waypoints);
     
     const powerUpSpawnPositions = [
       new THREE.Vector3(config.track.radius, 0.5, 0),
@@ -218,6 +227,35 @@ export class Game {
     this.setState(GameState.MAIN_MENU);
     this.soundManager.stopSound('engine');
     this.soundManager.stopSound('drifting');
+  }
+
+  private createTrees() {
+    const treeCount = 50;
+    const treeMaterial = new THREE.MeshPhongMaterial({ color: 0x006400 }); // Dark green
+    const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Saddle brown
+
+    for (let i = 0; i < treeCount; i++) {
+        // Position trees randomly outside the track
+        const angle = Math.random() * Math.PI * 2;
+        const distance = this.outerRadius + 5 + Math.random() * 20; // 5 to 25 units beyond the outer edge
+        const x = Math.cos(angle) * distance;
+        const z = Math.sin(angle) * distance;
+
+        // Simple tree model
+        const trunkHeight = 2 + Math.random() * 2;
+        const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.2, trunkHeight, 8);
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.set(x, trunkHeight / 2, z);
+        trunk.castShadow = true;
+        this.scene.add(trunk);
+
+        const leavesHeight = 4 + Math.random() * 2;
+        const leavesGeometry = new THREE.ConeGeometry(1.5, leavesHeight, 8);
+        const leaves = new THREE.Mesh(leavesGeometry, treeMaterial);
+        leaves.position.set(x, trunkHeight + leavesHeight / 2, z);
+        leaves.castShadow = true;
+        this.scene.add(leaves);
+    }
   }
 
   private getQuadrant(position: THREE.Vector3) {

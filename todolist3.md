@@ -44,11 +44,11 @@ To-Do List:
 
 Create a PowerUp class with different types (e.g., Speed Boost, Shield).
 Randomly spawn power-up items on the track for players to collect.
-[ ] Improve AI Opponent Behavior:
+[x] Improve AI Opponent Behavior:
 
 Enhance the AI's pathfinding to make it more competitive.
 Consider adding "rubber banding" to keep the race close.
-[ ] More Detailed Environment:
+[x] More Detailed Environment:
 
 Add more visual elements to the track, such as trees, grandstands, or different textures.
 Implement a skybox for a more realistic sky.

@@ -23,6 +23,11 @@ vi.mock('three', async () => {
   const actualThree = await vi.importActual('three');
   return {
     ...actualThree,
+    Object3D: class {
+      add = vi.fn();
+      position = { set: vi.fn() };
+      quaternion = { setFromUnitVectors: vi.fn() };
+    },
     AudioListener: vi.fn(() => mockAudioListener),
     Audio: vi.fn(() => mockAudio),
     AudioLoader: vi.fn(() => mockAudioLoader),
